@@ -1,0 +1,4 @@
+version: 2.1
+app_name: "hola-mundo-app"
+location: "Central US"
+sku: "F1"
