@@ -1,0 +1,25 @@
+trigger:
+- main  # Ejecuta el pipeline al hacer cambios en la rama 'main'
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  appName: 'holamundo-java-app'  # Nombre del App Service en Azure
+  resourceGroupName: 'DEVOPS-DEMO'  # Grupo de recursos donde está el App Service
+
+steps:
+- script: |
+    mkdir -p out
+    javac -d out src/Main.java
+    echo "Main-Class: Main" > MANIFEST.MF
+    jar -cvfm app.jar MANIFEST.MF -C out .
+  displayName: 'Compilar y empaquetar la aplicación'
+
+- task: AzureWebApp@1
+  inputs:
+    azureSubscription: 'JAVA'  # Conexión de servicio a Azure
+    appName: $(appName)
+    package: $(System.DefaultWorkingDirectory)/app.jar
+  displayName: 'Desplegar a Azure App Service'
+
