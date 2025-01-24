@@ -1,4 +1,25 @@
-version: 2.1
-app_name: "hola-mundo-app"
-location: "Central US"
-sku: "F1"
+trigger:
+- main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+- task: UsePythonVersion@0
+  inputs:
+    versionSpec: '3.x'
+    addToPath: true
+
+- script: |
+    python -m venv venv
+    source venv/bin/activate
+    pip install -r Devops/pyhton/01/requirements.txt
+    python Devops/pyhton/01/app.py
+  displayName: 'Run Hola Mundo App'
+
+- task: AzureWebApp@1
+  inputs:
+    azureSubscription: 'CONEXION'
+    appType: 'webAppLinux'
+    appName: 'hola-mundo-app'
+    package: $(Build.ArtifactStagingDirectory)/**/*.zip
