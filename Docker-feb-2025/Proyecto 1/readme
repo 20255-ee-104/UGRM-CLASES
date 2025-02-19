@@ -1,3 +1,16 @@
+En este proyecto, crearás un contenedor Docker que ejecute un servidor web básico utilizando Nginx. Nginx es uno de los servidores web de código abierto más populares para el proxy inverso, el equilibrio de carga y mucho más. Al final de este proyecto, habrás aprendido a crear y ejecutar contenedores con Docker y a exponer puertos para que se pueda acceder a la aplicación desde tu máquina local.
+
+Nivel de dificultad: Beginner
+
+Tecnologías utilizadas: Docker, Nginx
+
+Instrucciones paso a paso
+Instala Docker: Asegúrate de que Docker está instalado en tu sistema.
+Crea el directorio del proyecto: Crea una nueva carpeta y un archivo index.html dentro de ella que será servido por Nginx.
+Escribe el archivo Dockerfile: Un Dockerfile es un script que define el entorno del contenedor. Indica a Docker qué imagen base debe utilizar, qué archivos debe incluir y qué puertos debe exponer:
+
+
+
 PASO 1
 
 FROM nginx:alpine
