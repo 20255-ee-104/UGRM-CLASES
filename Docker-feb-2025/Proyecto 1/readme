@@ -1,0 +1,13 @@
+PASO 1
+
+FROM nginx:alpine
+COPY ./index.html /usr/share/nginx/html
+EXPOSE 80
+
+
+PASO 2
+docker build -t my-nginx-app .
+
+
+PASO 3
+docker run -d -p 8080:80 my-nginx-app
