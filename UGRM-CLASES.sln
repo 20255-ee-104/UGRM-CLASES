@@ -1,0 +1,32 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "CloudComputing", "CloudComputing", "{3EA7ABF6-0403-08D6-3884-E1F34FCBDFC8}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "blobstorage", "blobstorage", "{2363F04E-BF3F-5BB7-6E07-FCFB5CDB0A62}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MyDemoApp", "CloudComputing\blobstorage\MyDemoApp\MyDemoApp.csproj", "{52511B7F-95E5-2B7F-2F18-E3876B0C4BA0}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{52511B7F-95E5-2B7F-2F18-E3876B0C4BA0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{52511B7F-95E5-2B7F-2F18-E3876B0C4BA0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{52511B7F-95E5-2B7F-2F18-E3876B0C4BA0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{52511B7F-95E5-2B7F-2F18-E3876B0C4BA0}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{2363F04E-BF3F-5BB7-6E07-FCFB5CDB0A62} = {3EA7ABF6-0403-08D6-3884-E1F34FCBDFC8}
+		{52511B7F-95E5-2B7F-2F18-E3876B0C4BA0} = {2363F04E-BF3F-5BB7-6E07-FCFB5CDB0A62}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {D1CDBE29-4701-4B35-8A31-ADD93147EBF5}
+	EndGlobalSection
+EndGlobal

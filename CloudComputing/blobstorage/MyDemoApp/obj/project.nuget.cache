@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "MgVf2VJG7dw=",
+  "dgSpecHash": "MEU458pBSAY=",
   "success": true,
-  "projectFilePath": "C:\\repoGIT\\UGRM-CLASES\\CloudComputing\\blobstorage\\MyDemoApp\\MyDemoApp.csproj",
+  "projectFilePath": "C:\\Desarrollo\\Personal\\UGRM-CLASES\\CloudComputing\\blobstorage\\MyDemoApp\\MyDemoApp.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\freva\\.nuget\\packages\\azure.core\\1.44.1\\azure.core.1.44.1.nupkg.sha512",
     "C:\\Users\\freva\\.nuget\\packages\\azure.storage.blobs\\12.23.0\\azure.storage.blobs.12.23.0.nupkg.sha512",
