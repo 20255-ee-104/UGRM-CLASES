@@ -1,0 +1,33 @@
+Este proyecto consiste en contenerizar un sencillo script de Python que procesa datos de un archivo CSV utilizando la biblioteca pandas. El objetivo es aprender a gestionar dependencias y ejecutar scripts Python dentro de contenedores Docker, haciendo que el script sea portable y ejecutable en cualquier entorno.
+
+Nivel de dificultad: Beginner
+
+Tecnologías utilizadas: Docker, Python, pandas
+
+Instrucciones paso a paso
+Escribe el script de Python: Crea un script llamado process_data.py que lea y procese un archivo CSV. Aquí tienes un script de ejemplo:
+
+import pandas as pd
+df = pd.read_csv('data.csv')
+print(df.describe())
+Powered By 
+Crea un archivo requirements.txt: Este archivo enumera las bibliotecas Python que necesita el script. En este caso, sólo necesitamos pandas:
+
+pandas
+Powered By 
+Escribe el archivo Dockerfile: Este archivo definirá el entorno para el script Python:
+
+FROM python:3.9-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY . .
+CMD ["python", "process_data.py"]
+Powered By 
+Construye la imagen Docker:
+
+docker build -t python-script .
+Powered By 
+Ejecuta el contenedor:
+
+docker run -v $(pwd)/data:/app/data python-script
