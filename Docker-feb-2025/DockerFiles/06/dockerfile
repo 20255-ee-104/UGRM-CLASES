@@ -1,0 +1,23 @@
+# Usar la imagen oficial de Go
+FROM golang:1.20
+
+# Definir el directorio de trabajo dentro del contenedor
+WORKDIR /app
+
+# Copiar los archivos del proyecto
+COPY go.mod ./
+COPY go.sum ./
+RUN go mod download
+
+# Copiar el código fuente al contenedor
+COPY . .
+
+# Compilar la aplicación
+RUN go build -o main .
+
+# Exponer el puerto 8080
+EXPOSE 8080
+
+# Comando para ejecutar el servidor
+CMD ["/app/main"]
+

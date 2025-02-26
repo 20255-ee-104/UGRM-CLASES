@@ -1,0 +1,138 @@
+
+# 🚀 Frontend con PHP y Docker (Apache)
+
+Este proyecto contiene un **frontend en PHP** corriendo dentro de un contenedor **Docker con Apache**.
+
+---
+
+## 📌 **Requisitos**  
+Antes de comenzar, asegúrate de tener instalado:  
+- [Docker](https://www.docker.com/)  
+
+---
+
+## 📂 **Estructura del Proyecto**  
+```
+php-frontend/
+│── Dockerfile
+│── index.php
+│── .dockerignore
+```
+
+---
+
+## 🔧 **Configuración del Proyecto**  
+
+### 1️⃣ **Crear `.dockerignore`**  
+Crea un archivo `.dockerignore` con el siguiente contenido para evitar copiar archivos innecesarios:  
+
+```
+node_modules
+vendor
+composer.lock
+composer.phar
+*.log
+```
+
+---
+
+### 2️⃣ **Crear el archivo `index.php`**  
+Si no tienes un archivo de inicio, crea `index.php` con el siguiente contenido:  
+
+```php
+<?php
+echo "¡Bienvenido a tu frontend PHP en Docker!";
+?>
+```
+
+---
+
+### 3️⃣ **Crear `Dockerfile`**  
+Crea un archivo `Dockerfile` con el siguiente contenido:
+
+```dockerfile
+# Usar la imagen oficial de PHP con Apache
+FROM php:8.1-apache
+
+# Copiar los archivos del frontend al servidor Apache
+COPY . /var/www/html/
+
+# Exponer el puerto 80 para acceso web
+EXPOSE 80
+
+# Habilitar mod_rewrite para manejo de URLs en Apache
+RUN a2enmod rewrite
+
+# Configurar permisos para los archivos
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 755 /var/www/html
+
+# Definir el comando de inicio del contenedor
+CMD ["apache2-foreground"]
+```
+
+---
+
+## 🚀 **Construcción y Ejecución con Docker**  
+
+### 🔨 **Construir la imagen**  
+Ejecuta este comando en la terminal dentro del directorio del proyecto:  
+
+```sh
+docker build -t php-frontend .
+```
+
+---
+
+### ▶ **Ejecutar el contenedor**  
+```sh
+docker run -p 8080:80 php-frontend
+```
+📌 **La aplicación estará disponible en:**  
+🔗 [http://localhost:8080](http://localhost:8080)  
+
+---
+
+### 🔄 **Ejecutar en segundo plano (modo `detached`)**  
+```sh
+docker run -d -p 8080:80 php-frontend
+```
+
+### 📌 **Ver los contenedores en ejecución**  
+```sh
+docker ps
+```
+
+### ⏹ **Detener el contenedor**  
+```sh
+docker stop <ID_DEL_CONTENEDOR>
+```
+
+---
+
+## 🎯 **Resumen de Comandos**  
+
+| Acción | Comando |
+|--------|---------|
+| **Construir la imagen** | `docker build -t php-frontend .` |
+| **Ejecutar el contenedor** | `docker run -p 8080:80 php-frontend` |
+| **Ejecutar en segundo plano** | `docker run -d -p 8080:80 php-frontend` |
+| **Ver contenedores en ejecución** | `docker ps` |
+| **Detener el contenedor** | `docker stop <ID>` |
+
+---
+
+## 🛠 **Solución de Problemas**  
+
+### ❌ **No se muestra la página en el navegador**  
+✅ Verifica que el contenedor está corriendo con:  
+```sh
+docker ps
+```
+✅ Si el puerto 8080 está en uso, prueba con otro:  
+```sh
+docker run -p 9090:80 php-frontend
+```
+Accede a `http://localhost:9090`
+
+---
