@@ -1,0 +1,19 @@
+# Ignorar node_modules para evitar errores y conflictos
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Ignorar archivos y carpetas ocultas del sistema
+.DS_Store
+Thumbs.db
+
+# Ignorar Git y Docker propios
+.git
+.gitignore
+.dockerignore
+
+# Ignorar archivos de entorno sensibles
+.env
+.env.local
+.env.production
+.env.test
