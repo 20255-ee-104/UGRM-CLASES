@@ -1,0 +1,184 @@
+Aquí tienes el archivo **`README.md`** listo para que lo copies y lo uses en tu proyecto. 🚀  
+
+# 🚀 Aplicación Node.js con Docker  
+
+Este proyecto es una aplicación Node.js que se ejecuta dentro de un contenedor Docker.  
+
+---
+
+## 📌 **Requisitos**  
+Antes de comenzar, asegúrate de tener instalado:  
+- [Node.js](https://nodejs.org/)  
+- [Docker](https://www.docker.com/)  
+
+---
+
+## 📂 **Estructura del Proyecto**  
+```
+03/
+│── Dockerfile
+│── package.json
+│── package-lock.json
+│── server.js
+│── .dockerignore
+│── node_modules/ (se generará con npm install, no se copia a Docker)
+```
+
+---
+
+## 🔧 **Configuración del Proyecto**  
+
+### 1️⃣ **Crear `.dockerignore`**  
+Crea un archivo `.dockerignore` con el siguiente contenido:  
+
+```
+node_modules
+npm-debug.log
+yarn-error.log
+.DS_Store
+Thumbs.db
+.git
+.gitignore
+.dockerignore
+.env
+```
+
+---
+
+### 2️⃣ **Revisar `package.json`**  
+Asegúrate de que `package.json` tenga la sección `"scripts"`:  
+
+```json
+{
+  "name": "mi-app",
+  "version": "1.0.0",
+  "description": "Aplicación en Node.js con Docker",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
+```
+
+---
+
+### 3️⃣ **Crear `server.js`**  
+Si no tienes un archivo de entrada, crea `server.js` con el siguiente contenido:  
+
+```javascript
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 8080;
+
+app.get('/', (req, res) => {
+    res.send('¡Servidor corriendo en Docker!');
+});
+
+app.listen(PORT, () => {
+    console.log(`Servidor iniciado en http://localhost:${PORT}`);
+});
+```
+
+---
+
+### 4️⃣ **Crear `Dockerfile`**  
+Crea un archivo `Dockerfile` con el siguiente contenido:  
+
+```dockerfile
+# Usar Node.js como imagen base
+FROM node:14
+
+# Definir el directorio de trabajo dentro del contenedor
+WORKDIR /app
+
+# Copiar package.json y package-lock.json antes de instalar dependencias
+COPY package*.json ./
+RUN npm install
+
+# Copiar el resto del código al contenedor
+COPY . .
+
+# Exponer el puerto 8080 (documentación)
+EXPOSE 8080
+
+# Comando que ejecutará la aplicación dentro del contenedor
+CMD ["npm", "start"]
+```
+
+---
+
+## 🚀 **Construcción y Ejecución con Docker**  
+
+### 🔨 **Construir la imagen**  
+Ejecuta este comando en la terminal dentro del directorio del proyecto:  
+
+```sh
+docker build -t my-node-app .
+```
+
+---
+
+### ▶ **Ejecutar el contenedor**  
+```sh
+docker run -p 8080:8080 my-node-app
+```
+📌 **La aplicación estará disponible en:**  
+🔗 [http://localhost:8080](http://localhost:8080)  
+
+---
+
+### 🔄 **Ejecutar en segundo plano (modo `detached`)**  
+```sh
+docker run -d -p 8080:8080 my-node-app
+```
+
+### 📌 **Ver los contenedores en ejecución**  
+```sh
+docker ps
+```
+
+### ⏹ **Detener el contenedor**  
+```sh
+docker stop <ID_DEL_CONTENEDOR>
+```
+
+---
+
+## 🎯 **Resumen de Comandos**  
+
+| Acción | Comando |
+|--------|---------|
+| **Construir la imagen** | `docker build -t my-node-app .` |
+| **Ejecutar el contenedor** | `docker run -p 8080:8080 my-node-app` |
+| **Ejecutar en segundo plano** | `docker run -d -p 8080:8080 my-node-app` |
+| **Ver contenedores en ejecución** | `docker ps` |
+| **Detener el contenedor** | `docker stop <ID>` |
+
+---
+
+## 🛠 **Solución de Problemas**  
+
+### ❌ `npm ERR! missing script: start`
+✅ Asegúrate de que `package.json` tenga:  
+```json
+"scripts": {
+  "start": "node server.js"
+}
+```
+
+### ❌ `Error: Cannot find module '/server.js'`
+✅ Verifica que `server.js` está en el mismo directorio que el `Dockerfile`.  
+✅ Asegúrate de que `COPY . .` en el `Dockerfile` copie el archivo correctamente.  
+
+### ❌ `ERROR: failed to solve: archive/tar: unknown file mode`
+✅ Agrega `node_modules/` a `.dockerignore`.  
+✅ Ejecuta en PowerShell:  
+```sh
+git config --system core.longpaths true
+```
+
+---
+
