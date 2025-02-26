@@ -1,0 +1,14 @@
+# Usar la imagen oficial de MySQL
+FROM mysql:5.7
+
+# Definir variables de entorno para la base de datos
+ENV MYSQL_ROOT_PASSWORD=root
+ENV MYSQL_DATABASE=wordpress_db
+ENV MYSQL_USER=wordpress
+ENV MYSQL_PASSWORD=wordpress
+
+# Exponer el puerto 3306 para la base de datos
+EXPOSE 3306
+
+# Iniciar MySQL
+CMD ["mysqld"]

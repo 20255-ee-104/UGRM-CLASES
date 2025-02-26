@@ -1,0 +1,167 @@
+
+```md
+# 🚀 WordPress con MySQL en Docker
+
+Este proyecto contiene un **sitio WordPress** con **MySQL** empaquetado en **Docker** sin `docker-compose`.
+
+---
+
+## 📌 **Requisitos**
+Antes de comenzar, asegúrate de tener instalado:
+
+- [Docker](https://www.docker.com/)
+
+---
+
+## 📂 **Estructura del Proyecto**
+```
+wordpress-docker/
+│── Dockerfile            # Configuración del contenedor WordPress
+│── mysql-Dockerfile      # Configuración del contenedor MySQL
+│── .env                  # Variables de entorno para la base de datos
+```
+
+---
+
+## 🔧 **Configuración del Proyecto**
+
+### 1️⃣ **Crear el archivo `.env`**
+Crea un archivo llamado **`.env`** para definir las credenciales de la base de datos:
+
+```
+MYSQL_ROOT_PASSWORD=root
+MYSQL_DATABASE=wordpress_db
+MYSQL_USER=wordpress
+MYSQL_PASSWORD=wordpress
+```
+
+---
+
+### 2️⃣ **Crear `mysql-Dockerfile`**
+Este archivo define la configuración del contenedor MySQL:
+
+```dockerfile
+# Usar la imagen oficial de MySQL
+FROM mysql:5.7
+
+# Definir variables de entorno para la base de datos
+ENV MYSQL_ROOT_PASSWORD=root
+ENV MYSQL_DATABASE=wordpress_db
+ENV MYSQL_USER=wordpress
+ENV MYSQL_PASSWORD=wordpress
+
+# Exponer el puerto 3306 para la base de datos
+EXPOSE 3306
+
+# Iniciar MySQL
+CMD ["mysqld"]
+```
+
+📌 **Explicación**:
+- Usa **MySQL 5.7** como base.
+- Configura una base de datos `wordpress_db` con el usuario `wordpress`.
+- Expone el puerto **3306**.
+
+---
+
+### 3️⃣ **Crear `Dockerfile` para WordPress**
+Este archivo define el contenedor que ejecutará WordPress con Apache:
+
+```dockerfile
+# Usar la imagen oficial de WordPress con Apache
+FROM wordpress:latest
+
+# Exponer el puerto 80 para el servidor web
+EXPOSE 80
+
+# Copiar el contenido de WordPress (opcional)
+COPY . /var/www/html/
+
+# Definir variables de entorno para la configuración de la base de datos
+ENV WORDPRESS_DB_HOST=mysql_container
+ENV WORDPRESS_DB_USER=wordpress
+ENV WORDPRESS_DB_PASSWORD=wordpress
+ENV WORDPRESS_DB_NAME=wordpress_db
+
+# Ejecutar Apache en primer plano
+CMD ["apache2-foreground"]
+```
+
+📌 **Explicación**:
+- Usa la imagen oficial de **WordPress** con **Apache**.
+- Expone el puerto **80** para acceder al sitio.
+- Define las variables de entorno para conectar con **MySQL**.
+
+---
+
+## 🚀 **Construcción y Ejecución con Docker**
+
+### 🔨 **1. Construir la imagen de MySQL**
+Ejecuta este comando en la terminal para crear el contenedor de la base de datos:
+
+```sh
+docker build -t mysql-wordpress -f mysql-Dockerfile .
+```
+
+### ▶ **2. Iniciar MySQL**
+```sh
+docker run -d --name mysql_container -p 3306:3306 --env-file .env mysql-wordpress
+```
+
+📌 **Explicación**:
+- `-d` → Ejecuta en segundo plano.
+- `--name mysql_container` → Nombre del contenedor de MySQL.
+- `-p 3306:3306` → Expone el puerto **3306**.
+- `--env-file .env` → Usa las credenciales de **`.env`**.
+
+---
+
+### 🔨 **3. Construir la imagen de WordPress**
+```sh
+docker build -t wordpress-site -f Dockerfile .
+```
+
+### ▶ **4. Iniciar WordPress**
+```sh
+docker run -d --name wordpress_container --link mysql_container:mysql -p 8080:80 wordpress-site
+```
+
+📌 **Accede a tu sitio en:**  
+🔗 [http://localhost:8080](http://localhost:8080)
+
+---
+
+## 🎯 **Resumen de Comandos**
+| Acción | Comando |
+|--------|---------|
+| **Construir imagen MySQL** | `docker build -t mysql-wordpress -f mysql-Dockerfile .` |
+| **Ejecutar MySQL** | `docker run -d --name mysql_container -p 3306:3306 --env-file .env mysql-wordpress` |
+| **Construir imagen WordPress** | `docker build -t wordpress-site -f Dockerfile .` |
+| **Ejecutar WordPress** | `docker run -d --name wordpress_container --link mysql_container:mysql -p 8080:80 wordpress-site` |
+
+---
+
+## 🛠 **Solución de Problemas**
+
+### ❌ **WordPress no puede conectarse a la base de datos**
+✅ Verifica que MySQL esté en ejecución:
+```sh
+docker ps
+```
+Si MySQL no está corriendo, reinícialo:
+```sh
+docker start mysql_container
+```
+
+✅ Conéctate a MySQL manualmente para revisar la base de datos:
+```sh
+docker exec -it mysql_container mysql -uwordpress -pwordpress
+```
+Luego ejecuta:
+```sql
+SHOW DATABASES;
+```
+Si `wordpress_db` no aparece, revisa la configuración.
+
+---
+

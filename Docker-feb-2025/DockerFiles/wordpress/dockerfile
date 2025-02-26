@@ -1,0 +1,17 @@
+# Usar la imagen oficial de WordPress con Apache
+FROM wordpress:latest
+
+# Exponer el puerto 80 para el servidor web
+EXPOSE 80
+
+# Copiar el contenido de WordPress (opcional)
+COPY . /var/www/html/
+
+# Definir variables de entorno para la configuración de la base de datos
+ENV WORDPRESS_DB_HOST=mysql_container
+ENV WORDPRESS_DB_USER=root
+ENV WORDPRESS_DB_PASSWORD=root
+ENV WORDPRESS_DB_NAME=wordpress_db
+
+# Ejecutar Apache en primer plano
+CMD ["apache2-foreground"]
