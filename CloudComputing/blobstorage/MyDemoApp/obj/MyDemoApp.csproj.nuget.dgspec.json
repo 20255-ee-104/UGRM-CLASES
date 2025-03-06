@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Desarrollo\\Personal\\UGRM-CLASES\\CloudComputing\\blobstorage\\MyDemoApp\\MyDemoApp.csproj": {}
+    "c:\\Desarrollo\\Personal\\UGRM-CLASES\\CloudComputing\\blobstorage\\MyDemoApp\\MyDemoApp.csproj": {}
   },
   "projects": {
-    "C:\\Desarrollo\\Personal\\UGRM-CLASES\\CloudComputing\\blobstorage\\MyDemoApp\\MyDemoApp.csproj": {
+    "c:\\Desarrollo\\Personal\\UGRM-CLASES\\CloudComputing\\blobstorage\\MyDemoApp\\MyDemoApp.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Desarrollo\\Personal\\UGRM-CLASES\\CloudComputing\\blobstorage\\MyDemoApp\\MyDemoApp.csproj",
+        "projectUniqueName": "c:\\Desarrollo\\Personal\\UGRM-CLASES\\CloudComputing\\blobstorage\\MyDemoApp\\MyDemoApp.csproj",
         "projectName": "MyDemoApp",
-        "projectPath": "C:\\Desarrollo\\Personal\\UGRM-CLASES\\CloudComputing\\blobstorage\\MyDemoApp\\MyDemoApp.csproj",
+        "projectPath": "c:\\Desarrollo\\Personal\\UGRM-CLASES\\CloudComputing\\blobstorage\\MyDemoApp\\MyDemoApp.csproj",
         "packagesPath": "C:\\Users\\freva\\.nuget\\packages\\",
-        "outputPath": "C:\\Desarrollo\\Personal\\UGRM-CLASES\\CloudComputing\\blobstorage\\MyDemoApp\\obj\\",
+        "outputPath": "c:\\Desarrollo\\Personal\\UGRM-CLASES\\CloudComputing\\blobstorage\\MyDemoApp\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
