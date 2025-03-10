@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "lib": ["ES2019", "dom"],
+    "typeRoots": ["./src/types"],
+    "strict": true,
+    "noImplicitReturns": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "jsx": "react",
+    "allowSyntheticDefaultImports": true,
+    "rootDir": "./src",
+    "outDir": "./lib",
+    "module": "ES2020",
+    "moduleResolution": "Node",
+    "declaration": true
+  },
+  "exclude": ["./test", "./app"]
+}
