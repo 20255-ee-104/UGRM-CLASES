@@ -1,0 +1,39 @@
+#
+#  Author: Hari Sekhon
+#  Date: Tue Feb 4 09:53:28 2020 +0000
+#
+#  vim:ts=2:sts=2:sw=2:et
+#
+#  https://github.com/HariSekhon/GitHub-Actions
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+---
+name: Jenkinsfile
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - Jenkinsfile
+  pull_request:
+    branches:
+      - master
+      - main
+    paths:
+      - Jenkinsfile
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  jenkinsfile:
+    if: github.event.repository.fork == false
+    name: Jenkinsfile
+    uses: HariSekhon/GitHub-Actions/.github/workflows/jenkinsfile.yaml@master

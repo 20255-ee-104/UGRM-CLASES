@@ -1,0 +1,35 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2021-11-26 09:59:08 +0000 (Fri, 26 Nov 2021)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#        C l u s t e r   A u t o s c a l e r   K u s t o m i z a t i o n
+# ============================================================================ #
+
+# https://artifacthub.io/packages/helm/cluster-autoscaler/cluster-autoscaler
+
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+#namespace: kube-system
+
+helmCharts:
+  - name: cluster-autoscaler
+    repo: https://kubernetes.github.io/autoscaler
+    version: 9.26.0
+    releaseName: cluster-autoscaler
+    includeCRDs: true
+    namespace: kube-system
+    valuesFile: values.yaml

@@ -1,0 +1,232 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2021-02-23 13:33:31 +0000 (Tue, 23 Feb 2021)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                      J e n k i n s   C I   -   A g e n t
+# ============================================================================ #
+
+# StatefulSet to maintain a predictable pool of Jenkins Agents online to avoid spin-up delay
+
+# This is much more complicated than just using the Jenkins Kubernetes plugin which should be preferred
+
+# XXX: see my Jenkinsfile for a better way using Pipeline embedded pod template using native k8s pod, avoid agent { docker ... } and instead use agent { kubernetes }
+#
+#   https://github.com/HariSekhon/Templates/blob/master/Jenkinsfile
+
+# See Also:
+#
+#   jenkins-agent-pod.yaml - to be called directly in Jenkinsfile pipelein - this is the preferred way
+#   jenkins-agent.cloud-pod-DooD.yaml - for Jenkins Kubernetes plugin (burstable)
+#
+#   https://hub.docker.com/r/jenkins/inbound-agent/
+
+# If you only want 1 Jenkins agent, you can simply set JENKINS_SECRET under env, but if you want multiple agents you need to use some external Secret injection, eg.
+
+# - GCP Secret Manager integration:
+#   - Requirements:
+#     - jenkins-agent K8s service account annotated with jenkins-agent GCP service account (see jenkins-agent-serviceaccount.yaml)
+#     - jenkins-agent GCP service account
+#     - serviceAccount:PROJECT_ID.svc.id.goog[K8S_NAMESPACE/KSA_NAME] must be granted to use jenkins-agent GCP service account
+#     - Secret Manager API must be enabled in project
+#     - create the Nodes in Jenkins Server: jenkins-agent-0, jenkins-agent-1, jenkins-agent-2
+#     - copy the secret tokens from Jenkins Server to GCP Secret Manager as: jenkins-agent-0-token, jenkins-agent-1-token and jenkins-agent-2-token
+
+---
+apiVersion: apps/v1
+kind: StatefulSet  # for predictable names and to align to individual connection secrets
+metadata:
+  name: jenkins-agent
+  namespace: jenkins
+  labels:
+    app: jenkins-agent
+spec:
+  replicas: 3
+  serviceName: jenkins-agent
+  selector:
+    matchLabels:
+      app: jenkins-agent
+  template:
+    metadata:
+      labels:
+        app: jenkins-agent
+    spec:
+      priorityClassName: high-priority  # requires priorityclass.yaml
+      affinity:
+        # avoid preemption which can cause build failures
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  # gke-preemptible not valid on GKE AutoPilot clusters - remove in that case and leave only gke-spot
+                  - key: cloud.google.com/gke-preemptible
+                    operator: DoesNotExist
+                  - key: cloud.google.com/gke-spot
+                    operator: DoesNotExist
+                  - key: eks.amazonaws.com/capacityType
+                    operator: NotIn
+                    values:
+                      - SPOT
+                  - key: kubernetes.azure.com/scalesetpriority
+                    operator: NotIn
+                    values:
+                      - spot
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: topology.kubernetes.io/zone
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - jenkins-agent
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - jenkins-agent
+      serviceAccountName: jenkins-agent
+      securityContext:
+        runAsUser: 0    # required to access docker.sock
+        #fsGroup: 1000  # jenkins gid to access docker.sock, but fails to change socket group owner in container
+
+      # XXX: Trick: dynamically get the jenkins agent secret from GCP Secret Manager, populate to a file to be picked up by main container as a form of late evaluation since we can't use downwards API to populate different K8s secrets
+      # WARNING: only do this in very trusted environments or an isolated project - if Devs or untrusted users can run code in your Jenkins Agents via build jobs then they can read out the Secret Manager secrets for the current project!
+      #          Consider using the jenkins-agent-cloud-pod.yaml for Kubernetes plugin instead to dynamically spin up agents
+      #          Other options are run a separate stateful for each agent or put all agent secrets in the env and have the initContainer load the one matching the current hostname
+      initContainers:
+        - name: gcp-secret-mount
+          image: gcr.io/google.com/cloudsdktool/cloud-sdk:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+          args:
+            - -c
+            # find latest version of the JENKINS_SECRET in GCP Secret Manager secret called 'jenkins-agent-N-token' and download it to /secrets/token to be picked up by the main jenkins-agent container
+            # Workload Identity - auth for this is done by linking k8s service account to external GCP service account which must be granted GCP IAM permission to read secrets from GCP Secret Manager
+            # this requires GCP jenkins-agent@$PROJECT_ID.iam.gserviceaccount.com (bound by jenkins-agent k8s serviceaccount above) to be granted IAM roles:
+            #
+            #   Secret Manager Secret Accessor
+            #   Secret Manager Secret Version Manager  # to list the latest secret version
+            #
+            - gcloud secrets versions access $(gcloud secrets versions list "${JENKINS_AGENT_NAME}-token" --filter='state=enabled' --format='value(name)' | sort -k1nr | head -n1) --secret="${JENKINS_AGENT_NAME}-token" > /secret/token
+          env:
+            - name: CLOUDSDK_CORE_PROJECT
+              # XXX: set PROJECT_ID to your GCP project containing your Secrets Manager secrets: jenkins-agent-N-token
+              value: PROJECT_ID
+            - name: JENKINS_AGENT_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          volumeMounts:
+            - name: secret
+              mountPath: /secret
+              readOnly: false
+      containers:
+        - name: jenkins-agent
+          # there is no lts tag at this time
+          image: jenkins/inbound-agent:latest
+          #image: jenkins/inbound-agent:4.6-1
+          # not necessary or recommended, see the DooD comments further down
+          #image: harisekhon/jenkins-agent-docker:4.6
+          imagePullPolicy: IfNotPresent
+          workingDir: /var/jenkins
+          command:
+            # use shell in order to late eval contents of /secret/token into an arg
+            - sh
+          args:
+            - -c
+            # not feeding as args that that behaviour is much more buggy and dependent on entrypoint positional arg parsing which doesn't work as documented
+            - "JENKINS_SECRET=$(cat /secret/token; rm -f /secret/token) jenkins-agent"
+          ports:
+            - name: agent
+              containerPort: 50001
+          #securityContext:
+          #  privileged: true
+          env:
+            - name: JENKINS_AGENT_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            # JENKINS_NAME for legacy support
+            #- name: JENKINS_NAME
+            #  value: $(JENKINS_AGENT_NAME)
+            - name: JENKINS_URL
+              value: http://jenkins-ui.jenkins.svc.cluster.local:8080
+            - name: JENKINS_TUNNEL
+              value: jenkins-discovery.jenkins.svc.cluster.local:50000
+    #        - name: JENKINS_SECRET
+    #          valueFrom:
+    #            secretKeyRef:
+    #              # doesn't interpolate
+    #              #name: $(JENKINS_AGENT_NAME)-secret
+    #              #key: $(JENKINS_AGENT_NAME)-secret
+    #              # You can do this if you only want 1 agent, but if you want multiple you need to read the notes near the top
+    #              name: jenkins-agent-0-secret
+    #              key: jenkins-agent-0-secret
+            - name: JENKINS_AGENT_WORKDIR
+              # XXX: this path should match the Jenkins Server "Remote root directory" config option
+              value: /var/jenkins
+          readinessProbe:
+            tcpSocket:
+              port: 50001
+          livenessProbe:
+            tcpSocket:
+              port: 50001
+          resources:
+            requests:
+              cpu: 100m      # agent takes 6m resting, don't overallocate, drives node pool scaling costing $$$
+              memory: 500Mi  # agent takes 108Mi resting, plus whatever you run in the CI pipeline
+            limits:
+              cpu: 2
+              memory: 3Gi
+          tty: false
+          volumeMounts:
+            - name: workspace
+              # XXX: this path should match the Jenkins Server "Remote root directory" config option
+              mountPath: /var/jenkins
+              readOnly: false
+            - name: secret
+              mountPath: /secret
+              readOnly: false
+              # XXX: for DooD - Docker-out-of-Docker - only do this if you trust all Jenkins users!!!
+              #
+              # XXX: not necessary or recommended, instead see kubernetes agent section in Jenkinsfile:
+              #
+              #       https://github.com/HariSekhon/Templates/blob/master/Jenkinsfile
+              #
+            - name: docker-sock
+              mountPath: /var/run/docker.sock
+      volumes:
+        - name: workspace
+          emptyDir: {}
+        - name: secret
+          emptyDir: {}
+          # XXX: for DooD - Docker-out-of-Docker - only do this if you trust all Jenkins users!!!
+          #
+          # XXX: not necessary or recommended, instead see kubernetes agent section in Jenkinsfile:
+          #
+          #       https://github.com/HariSekhon/Templates/blob/master/Jenkinsfile
+          #
+        - name: docker-sock
+          hostPath:
+            path: /var/run/docker.sock
+            type: Socket

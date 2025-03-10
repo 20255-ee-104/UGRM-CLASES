@@ -1,0 +1,60 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2019-10-10 17:42:54 +0100 (Thu, 10 Oct 2019)
+#
+#  https://github.com/HariSekhon/DevOps-Bash-tools
+#
+#  License: see accompanying LICENSE file
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                            C o n f i g   F i l e s
+# ============================================================================ #
+
+# Files to link to $HOME, one per line
+
+.editorconfig
+.envrc
+.envrc-python
+.gitconfig
+.gitignore
+# top-level .mdlrc is cumulative and can mask issues in project repos
+# instead use an .mdlrc and .mdl.rb in each repo individually
+#.mdlrc
+#.mdl.rb
+# home dir is too heavy for this right now
+#.pre-commit-config.yaml
+.pylintrc
+configs/.ansible.cfg
+configs/.athenacli/athenaclirc
+#.aws/config
+configs/.aws/shell/awsshellrc
+aws/.aws_customize_environment
+configs/.Codefresh/cli-config/config.yaml
+configs/.config/flake8
+configs/.config/htop/htoprc
+configs/.config/pycodestyle
+configs/.config/yamllint/config
+configs/.customize_environment
+configs/.editorconfig
+configs/.gemrc
+configs/.git-templates/git-secrets/hooks/*
+configs/.grype.yaml
+configs/.inputrc
+configs/.my.cnf
+configs/.perlcriticrc
+configs/.perlcritic_forbidden_modules
+configs/.psqlrc
+configs/.rabbitmqadmin.conf
+configs/.sawsrc
+configs/.screenrc
+configs/.sdkman/etc/config
+configs/.sqliterc
+configs/.tmux.conf
+configs/.toprc
+configs/.vimrc
+configs/.Xdefaults
+configs/.Xmodmap
+scalastyle_config.xml

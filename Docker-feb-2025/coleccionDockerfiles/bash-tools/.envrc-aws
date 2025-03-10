@@ -1,0 +1,202 @@
+#!/usr/bin/env bash
+#  vim:ts=4:sts=4:sw=4:et
+#
+#  Author: Hari Sekhon
+#  Date: 2021-07-27 12:42:32 +0100 (Tue, 27 Jul 2021)
+#
+#  https://github.com/HariSekhon/DevOps-Bash-tools
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                              A W S   D i r E n v
+# ============================================================================ #
+
+# https://direnv.net/man/direnv-stdlib.1.html
+
+# See Also:
+#
+#   .envrc
+#   .envrc-gcp
+#   .envrc-kubernetes
+
+# direnv stdlib - loads .envrc from parent dir up to /
+#
+# useful to accumulate parent and child directory .envrc settings eg. adding Kubernetes namespace, ArgoCD app etc.
+#
+# bypasses security authorization though - use with care
+#source_up
+#
+# source_up must be loaded before set -u otherwise gets this error:
+#
+#   direnv: loading .envrc
+#   /bin/bash: line 226: $1: unbound variable
+
+set -euo pipefail
+[ -n "${DEBUG:-}" ] && set -x
+srcdir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [ -n "${CI:-}" ]; then
+    exit 0
+fi
+
+# XXX: Edit - crucial to set to the right environment, the rest of the inferred settings below depend on this
+if [ -z "${AWS_PROFILE:-}" ]; then
+    exit 0
+fi
+
+aws configure list 2>/dev/null || :
+echo
+
+# If not logged in:
+#
+# - and we know the AWS_PROFILE
+# - and AWS_NO_AUTOLOGIN is not set
+# - check for SSO key in config section for this profile
+# - if found then do an automatic 'aws sso login'
+#
+if ! aws sts get-caller-identity --output table; then
+    if [ -n "${AWS_PROFILE:-}" ] &&
+       [ -z "${AWS_NO_AUTOLOGIN:-}" ]; then
+        # assumes you're not putting a blank line until the next section block
+        #if sed -n "/profile.*$AWS_PROFILE/,/^[[:space:]]*$/p" ~/.aws/config | grep -q sso_start_url; then
+        # goes until the next [profile ...] section instead, should be more reliable
+        if sed -n "/profile.*$AWS_PROFILE/,/^[[:space:]]*\[.+\]/p" ~/.aws/config | grep -q sso_start_url; then
+            echo
+            aws sso login
+        fi
+    fi
+fi
+echo
+
+# 'aws sts get-caller-identity --query Account' succeeds in returning the account id
+# from the ~/.aws/config even if 'aws sso login' has expired
+AWS_ACCOUNT_ID="$(
+    aws sts get-caller-identity --query Account --output text ||
+    aws configure get sso_account_id ||
+    :
+)"
+echo "AWS Account ID: $AWS_ACCOUNT_ID"
+export AWS_ACCOUNT_ID
+echo
+
+# might not have permissions to the Organizations in which case this will error instead of return
+AWS_ACCOUNT="$(aws organizations describe-account --account-id "$AWS_ACCOUNT_ID" 2>/dev/null)"
+if [ -n "$AWS_ACCOUNT" ]; then
+    echo "AWS Account: $AWS_ACCOUNT"
+    export AWS_ACCOUNT
+    echo
+fi
+
+AWS_DEFAULT_REGION="$(aws configure get region || :)"  # use region configured in profile by default
+AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-eu-west-1}"  # XXX: Edit default fallback region
+export AWS_DEFAULT_REGION
+echo "AWS Region: $AWS_DEFAULT_REGION"
+echo
+
+export AWS_DEFAULT_OUTPUT=json
+
+# XXX: Edit, or remove if only have 1 cluster in account, will auto-determine below
+export EKS_CLUSTER="mycluster"
+
+# safer but slower
+#eks_clusters=()
+#while IFS='' read -r line; do
+#    eks_clusters+=("$line")
+##done < <(aws eks list-clusters --output=json | jq -r '.clusters[]')
+#done < <(aws eks list-clusters --query 'clusters[]' --output text)
+#if [ "${#eks_clusters[@]}" -eq 1 ]; then
+#    export EKS_CLUSTER="${eks_clusters[*]}"
+#fi
+
+eks_clusters="$(
+    aws eks list-clusters --query 'clusters' --output text |
+    tr '[:space:]' '\n' |
+    sed '/^[[:space:]]*$/d'
+)"
+
+if [ -n "$eks_clusters" ]; then
+    num_eks_clusters="$(grep -c . <<< "$eks_clusters")"
+    echo "EKS Clusters ($num_eks_clusters):"
+    echo
+    echo "$eks_clusters"
+    echo
+    # If EKS_CLUSTER isn't set and there is only one EKS cluster in this account and region, then use it
+    if [ -z "${EKS_CLUSTER:-}" ]; then
+        if [ "$num_eks_clusters" = 1 ]; then
+            EKS_CLUSTER="$eks_clusters"
+        fi
+    fi
+else
+    num_eks_clusters=0
+fi
+
+if [ -n "${EKS_CLUSTER:-}" ]; then
+    # kubectl context is easily created by running adjacent aws_kube_creds.sh script first
+    export EKS_CONTEXT="arn:aws:eks:$AWS_DEFAULT_REGION:$AWS_ACCOUNT_ID:cluster/$EKS_CLUSTER"
+
+    if command -v kubectl &>/dev/null; then
+        if ! kubectl config get-clusters | grep -Fxq "$EKS_CONTEXT"; then
+            echo "EKS Cluster '$EKS_CLUSTER' not configured, configuring now"
+            aws eks update-kubeconfig --name "$EKS_CLUSTER"
+            echo
+        fi
+    fi
+
+    # XXX: safer to inline .envrc-kubernetes if you're worried about changes to it bypassing 'direnv allow' authorization
+    # shellcheck disable=SC1090,SC1091
+    . "$srcdir/.envrc-kubernetes" "$EKS_CONTEXT" ${EKS_NAMESPACE:+"$EKS_NAMESPACE"}
+fi
+
+if [ "$num_eks_clusters" = 1 ]; then
+    if grep -q '^[[:space:]]*export[[:space:]]*EKS_CLUSTER' .envrc &&
+     ! grep -q "^export EKS_CLUSTER=$eks_clusters$" .envrc; then
+        echo
+        echo "Updating EKS_CLUSTER in .envrc from:"
+        echo
+        grep '^[[:space:]]*export[[:space:]]*EKS_CLUSTER' .envrc
+        echo
+        echo "to"
+        echo
+        echo "export EKS_CLUSTER=$eks_clusters"
+        echo
+        perl -pi -e "s/^\\s*export\s+EKS_CLUSTER=.*/export EKS_CLUSTER=$eks_clusters/" .envrc
+        echo
+    fi
+fi
+
+# better to load this dynamically from credentials, using functions in .bash.d/aws.sh
+#export AWS_ACCESS_KEY_ID=...
+#export AWS_SECRET_ACCESS_KEY=...
+#export AWS_SESSION_TOKEN=...
+
+#export AWS_CONFIG_FILE=~/.aws/config
+#export AWS_SHARED_CREDENTIALS_FILE=~/.aws/credentials
+#export AWS_MAX_ATTEMPTS=3
+
+# to quickly export prefixed AWS environment keys if they exist for simple overrides, see examples below
+aws_access_key_env(){
+    env="$1"
+    for key in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+        varname="${env}_${key}"
+        if [ -n "${!varname:-}" ]; then
+            export "$key"="${!varname}"
+        fi
+    done
+}
+
+#aws_access_key_env "DEV"
+#aws_access_key_env "STAGING"
+#aws_access_key_env "PROD"
+#aws_access_key_env "MGMT"
+
+# pull the secret using this command whenever you need it:
+#
+#   aws_secret_get.sh "$JENKINS_ADMIN_PASSWORD_AWS_SECRET" | copy_to_clipboard.sh
+#
+export JENKINS_ADMIN_PASSWORD_AWS_SECRET="jenkins-admin-password"

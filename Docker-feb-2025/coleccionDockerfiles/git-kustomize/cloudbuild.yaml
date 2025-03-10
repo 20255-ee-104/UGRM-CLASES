@@ -1,0 +1,61 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2021-12-06 17:59:07 +0000 (Mon, 06 Dec 2021)
+#
+#  https://github.com/HariSekhon/Dockerfiles
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# see Master cloudbuild.yaml template at
+#
+#   https://github.com/HariSekhon/Templates/blob/master/cloudbuild.yaml
+
+---
+options:
+  dynamic_substitutions: true
+substitutions:
+  _IMAGE_NAME: git-kustomize
+  _IMAGE_VERSION: "4.4"  # XXX: must override this, eg. "gcloud builds submit --substitutions=_IMAGE_VERSION:4.5"
+  _REGISTRY: europe-docker.pkg.dev
+  _REPOSITORY: git-kustomize
+  _PROJECT: $CLOUDSDK_CORE_PROJECT
+  _IMAGE: ${_REGISTRY}/${_PROJECT}/${_REPOSITORY}/${_IMAGE_NAME}
+
+timeout: 660s
+
+images:
+  - ${_REGISTRY}/${_PROJECT}/${_REPOSITORY}/${_IMAGE_NAME}
+
+steps:
+  - id: pull-image-cache-latest
+    name: gcr.io/cloud-builders/docker
+    waitFor: ['-']
+    entrypoint: 'bash'
+    args:
+      - -c
+      - docker pull ${_IMAGE}:latest || exit 0
+
+  - id: pull-image-cache-version
+    name: gcr.io/cloud-builders/docker
+    waitFor: ['-']
+    entrypoint: 'bash'
+    args:
+      - -c
+      - docker pull ${_IMAGE}:${_IMAGE_VERSION} || exit 0
+
+  - id: build-git-kustomize
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --tag=${_IMAGE}:latest
+      - --tag=${_IMAGE}:${_IMAGE_VERSION}
+      - --build-arg=BUILDKIT_INLINE_CACHE=1
+      - --cache-from=${_IMAGE}:latest
+      - --cache-from=${_IMAGE}:${_IMAGE_VERSION}
+      - .
+    timeout: 600s

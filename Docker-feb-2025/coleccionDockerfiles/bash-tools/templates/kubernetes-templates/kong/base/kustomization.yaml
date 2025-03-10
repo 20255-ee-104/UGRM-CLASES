@@ -1,0 +1,67 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2023-04-10 20:29:46 +0100 (Mon, 10 Apr 2023)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                      K o n g   K u s t o m i z a t i o n
+# ============================================================================ #
+
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+#namespace: kong  # don't enable this, will override echoserver namespace
+
+resources:
+  - priorityclass.yaml
+  - namespace.yaml
+  #- kong-cluster-plugin-prometheus.yaml
+  #- kong-cluster-plugin-request-transformer-adv.yaml
+  #- kong-cluster-plugin-response-transformer-adv.yaml
+  #- kong-consumer.yaml
+  #- kong-plugin-key-auth.yaml
+  - kong-plugin-ip-restriction.yaml  # plugin applied to Admin API in kong-values.yaml to only allow private addresses
+  - kong-network-policy.yaml  # NAP to only allow private addresses to acces the Admin API
+  - kong-plugin-ratelimit.yaml
+  #- kong-plugin-acl.yaml
+  #- kong-plugin-exit-transformer.yaml
+  #- kong-plugin-jq.yaml
+  #- kong-plugin-oidc.yaml
+  #- kong-plugin-ratelimit-adv.yaml
+  #
+  # XXX: for quickly testing Kong - uncomment kong-plugin-ratelimit.yaml above and 'konghq.com/plugins: ratelimit-by-ip' in echoserver.yaml to see Rate Limiting in action with a few refreshes
+  #- echoserver.yaml
+  #- kong-ingress-echoserver.yaml
+
+# https://artifacthub.io/packages/helm/kong/kong
+#
+# https://github.com/Kong/kubernetes-ingress-controller
+#
+# https://docs.konghq.com/kubernetes-ingress-controller/latest/references/version-compatibility/
+#
+helmCharts:
+  - name: kong
+    repo: https://charts.konghq.com
+    #version: 2.12.0  # latest version still compatiable with Kubernetes 1.21
+    version: 2.19.0  # XXX: 2.19.0 still generates old ingress api objects, upgrade this chart when newer versions become available
+    releaseName: kong
+    namespace: kong
+    includeCRDs: true
+    valuesFile: values.yaml
+
+#patches:
+#  # XXX: latest Helm chart is still generating outdated ingress objects as of 2.19.0
+#  - path: ingress-apiversion.jsonpatch.yaml
+#    target:
+#      kind: Ingress

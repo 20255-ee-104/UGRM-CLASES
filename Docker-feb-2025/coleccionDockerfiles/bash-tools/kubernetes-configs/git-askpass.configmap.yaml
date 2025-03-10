@@ -1,0 +1,47 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2022-08-24 16:35:39 +0100 (Wed, 24 Aug 2022)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#  kics-scan ignore
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                      G i t   A s k P a s s   S c r i p t
+# ============================================================================ #
+
+# XXX: simpler solution if using this for ArgoCD Kustomize External Bases to the same private repo for tagged bases, is ensure the argo app is set to use
+#      the https://github.com url instead of the git@github.com address for the repo to ensure ArgoCD loads the https credential for Kustomize to use
+#
+#      For using other external repos that might require different credentials, then this solution is currently necessary
+
+# simplified version of https://github.com/HariSekhon/DevOps-Bash-tools/blob/master/git/git_askpass.sh
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: git-askpass
+  #namespace: NAMESPACE  # override this in kustomization.yaml, eg. see argocd-kustomization.yaml
+data:
+  git_askpass.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+    username="${GIT_USERNAME:-${GIT_USER:-}}"
+    password="${GIT_TOKEN:-${GIT_PASSWORD:-}}"
+    if [ "${1:-}" = get ]; then
+      echo "username=$username"
+      echo "password=$password"
+    elif [[ "$*" =~ Username ]]; then
+      echo "$username"
+    elif [[ "$*" =~ Password ]]; then
+      echo "$password"
+    fi

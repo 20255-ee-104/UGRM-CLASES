@@ -1,0 +1,90 @@
+#
+#  Author: Hari Sekhon
+#  Date: [% DATE  # 2021-04-21 10:52:12 +0100 (Wed, 21 Apr 2021) %]
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                              J S O N   P a t c h
+# ============================================================================ #
+
+# Use to patch something with more control than a StrategicMergePatch will allow eg. injecting an item into a list
+
+# https://github.com/kubernetes-sigs/kustomize/blob/master/examples/jsonpatch.md
+#
+# https://tools.ietf.org/html/rfc6902
+
+# Apply:
+#
+#   run: kubectl patch "$object" "$name" --namespace "$namespace" --type json --patch "$(cat patch.yaml)"
+
+---
+- op: replace
+  path: /path/to/key
+  value: string_or_struct
+
+# ============================================================================ #
+#                         S i m p l e   e x a m p l e s
+# ============================================================================ #
+
+- op: remove
+  # slashes must be replaced with ~1 so 'app.kubernetes.io/instance'
+  #                             becomes 'app.kubernetes.io~1instance'
+  path: /metadata/labels/app.kubernetes.io~1instance
+
+# Add an extra CLI switch to an container without overwriting existing command args
+- op: add
+  path: /spec/template/spec/containers/0/command/-
+  value: --extra-switch
+
+# ============================================================================ #
+#                       A d v a n c e d   E x a m p l e s
+# ============================================================================ #
+
+# Add a whole key environment variables key
+- op: add
+  path: /spec/template/spec/containers/0/env
+  # XXX: list because it's a whole env being added to a container without an existing env key
+  value:
+    - name: GIT_ASKPASS
+      value: /usr/local/bin/git_askpass.sh
+    - name: GIT_USER
+      valueFrom:
+        secretKeyRef:
+          name: github-https-username
+          key: username
+    - name: GIT_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: github-https-token
+          key: token
+
+# Add a new volumeMount key to an existing volumeMounts
+- op: add
+  path: /spec/template/spec/containers/0/volumeMounts/-
+  # XXX: no list dash prefix because it's a single list item being added to an existing list, as denoted by the ending dash in the path above
+  value:
+    name: git-askpass
+    mountPath: /usr/local/bin/git_askpass.sh
+
+# Add a new volume key to an existing volumes
+- op: add
+  path: /spec/template/spec/volumes/-
+  # XXX: no list dash prefix because it's a single list item being added to an existing list, as denoted by the ending dash in the path above
+  value:
+    name: git-askpass
+    configMap:
+      name: git-askpass
+      items:
+        - key: git_askpass.sh
+          path: git_askpass.sh

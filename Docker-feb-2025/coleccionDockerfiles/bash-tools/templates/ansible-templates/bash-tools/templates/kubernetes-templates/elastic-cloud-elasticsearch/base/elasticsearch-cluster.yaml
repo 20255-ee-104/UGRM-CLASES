@@ -1,0 +1,75 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2022-08-18 14:55:44 +0100 (Thu, 18 Aug 2022)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                     Elasticsearch Cluster for ECK operator
+# ============================================================================ #
+
+# https://www.elastic.co/guide/en/cloud-on-k8s/current/k8s-elasticsearch-specification.html
+
+---
+apiVersion: elasticsearch.k8s.elastic.co/v1
+kind: Elasticsearch
+metadata:
+  name: mycluster  # XXX: Edit
+  namespace: elasticsearch  # can be any namespace, the ECK hooks will launch a cluster in the same namespace
+spec:
+  version: 8.3.3   # XXX: Edit
+  nodeSets:
+    - name: default
+      count: 1     # XXX: Edit
+      # bad for performance, added init container to increase mmap address space further down instead, see also:
+      #
+      #   https://www.elastic.co/guide/en/cloud-on-k8s/current/k8s-virtual-memory.html
+      #
+      #config:
+      #  node.store.allow_mmap: false
+      #
+      podTemplate:
+        spec:
+          initContainers:
+            - name: sysctl
+              securityContext:
+                privileged: true
+                runAsUser: 0
+              command: ['sh', '-c', 'sysctl -w vm.max_map_count=262144']
+          containers:
+            - name: elasticsearch
+              resources:
+                requests:
+                  cpu: 500m
+                  memory: 2.3Gi
+                limits:
+                  cpu: "1"
+                  memory: 4Gi
+              env:
+                - name: ES_JAVA_OPTS
+                  value: "-Xms2g -Xmx2g"
+                # make the topology.kubernetes.io/zone annotation available as an environment variable and use it as a cluster routing allocation attribute
+                - name: ZONE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.annotations['topology.kubernetes.io/zone']
+      volumeClaimTemplates:
+        - metadata:
+            name: elasticsearch-data  # Do not change this name unless you set up a volume mount for the data path
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 5Gi
+            #storageClassName: standard-resizeable  # XXX: add storageclass-gcp-standard-resizeable.yaml to enable

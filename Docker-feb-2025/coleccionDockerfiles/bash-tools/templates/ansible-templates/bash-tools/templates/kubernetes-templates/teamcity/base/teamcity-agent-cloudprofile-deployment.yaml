@@ -1,0 +1,172 @@
+#
+#  Author: Hari Sekhon
+#  Date: Thu Nov 26 13:35:31 2020 +0000
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                     T e a m C i t y   C I   -   A g e n t
+# ============================================================================ #
+
+# Deployment template for Kubernetes Cloud Profile to reference when creating automated agents
+#
+# Slower to start builds from cold after 30 min default cloud profile spindown as new agents are spun up with plugin download & restart, but you can disable the spin-down timeout to keep them running for better response times similar to the statefulset
+#
+# Since TeamCity cloud profiles don't have a min instance count to maintain, you could create 2 cloud profiles:
+# - one profile with a max instances and no terminate after idle time - this provides a constant baseline pool of agents
+# - second profile for burst instances which terminates after idle time as normal
+
+# See Also:
+#
+#   teamcity-agent.yaml (statefulset)
+#
+#   https://github.com/HariSekhon/DevOps-Bash-tools/blob/master/setup/teamcity-docker-compose.yml
+
+
+# Used as a template by TeamCity's Kubernetes Cloud Profile to auto-spin up and authorize agents
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: teamcity-agent
+  namespace: teamcity
+  labels:
+    app: teamcity-agent
+    profile: cloud
+  annotations:
+  #  datree.skip/CONTAINERS_INCORRECT_PRIVILEGED_VALUE_TRUE: TeamCity Agent needs privileges for Docker in Docker
+    datree.skip/DEPLOYMENT_INCORRECT_REPLICAS_VALUE: TeamCity Agent Cloud Profile is a template only, does not run actual replicas, so replicas should be 0
+spec:
+  # we don't run replicas here, this is for TeamCity's Kubernetes Cloud Profile to copy the pod spec
+  replicas: 0
+  selector:
+    matchLabels:
+      app: teamcity-agent
+      profile: cloud
+  template:
+    metadata:
+      labels:
+        app: teamcity-agent
+        profile: cloud
+    spec:
+      priorityClassName: high-priority  # requires priorityclass.yaml
+      affinity:
+        # avoid preemption which can cause build failures
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  # gke-preemptible not valid on GKE AutoPilot clusters - remove in that case and leave only gke-spot
+                  - key: cloud.google.com/gke-preemptible
+                    operator: DoesNotExist
+                  - key: cloud.google.com/gke-spot
+                    operator: DoesNotExist
+                  - key: eks.amazonaws.com/capacityType
+                    operator: NotIn
+                    values:
+                      - SPOT
+                  - key: kubernetes.azure.com/scalesetpriority
+                    operator: NotIn
+                    values:
+                      - spot
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: topology.kubernetes.io/zone
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - teamcity-agent
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - teamcity-agent
+      securityContext:
+        #runAsUser: 0
+        # set mount point group to gid of teamcity process
+        fsGroup: 1000
+#      initContainers:
+#        - name: init
+#          image: busybox:latest
+#          # XXX: it's either this or run teamcity-agent as root to access the socket
+#          #      Perm/Group changes are not propagated to the host's /var/run/docker.sock but there
+#          #      is still a serious risk of malicious builds running docker containers as root
+#          #      you must trust your developers, and preferably segregate to a separate CI k8s cluster
+#          command: ['/bin/chgrp', '1000', '/var/run/docker.sock']
+#          #command: ['/bin/sh', '-c', 'chgrp 1000 /var/run/docker.sock && chmod 0660 /var/run/docker.sock']
+#          volumeMounts:
+#            - name: var-run-docker-sock
+#              mountPath: /var/run/docker.sock
+      containers:
+        - name: teamcity-agent
+          #image: jetbrains/teamcity-agent:2020.2.1
+          # DOCKER_IN_DOCKER - must use linux-sudo image or run entire container as root since Docker must be started by root
+          image: jetbrains/teamcity-agent:2020.2.1-linux-sudo
+          ports:
+            - containerPort: 9090
+          #securityContext:
+          #  # required for DOCKER_IN_DOCKER
+          #  privileged: true
+          env:
+            - name: AGENT_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: DOCKER_IN_DOCKER
+              value: start
+            - name: SERVER_URL
+              value: http://teamcity-server.teamcity.svc.cluster.local:8111
+          readinessProbe:
+            tcpSocket:
+              port: 9090
+            initialDelaySeconds: 30
+            successThreshold: 1
+            failureThreshold: 3
+            periodSeconds: 5
+            timeoutSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 9090
+            initialDelaySeconds: 150  # takes ~ 1:20 - 2:30 for port to pass healthcheck
+            successThreshold: 1
+            failureThreshold: 10
+            periodSeconds: 5
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 100m    # 6m resting
+              memory: 1Gi  # 700-850Mi resting + pipeline progs
+            limits:
+              cpu: "2"
+              # TeamCity agent's 2 processes JVM heaps are -Xmx384m and -Xmx16m, plus overheads and wiggle room = 1Gi
+              # + build processes which could take a couple GB each = 3Gi
+              memory: 3Gi
+          # don't mount /var/run/docker.sock or you'll be using the underlying host's Docker instead of TeamCity's DOCKER_IN_DOCKER, which exposes too much of the underlying k8s but also you'll get errors like this from the underlying host when the docker wrapper tries to mount all the buildagent paths:
+          # docker: Error response from daemon: error while creating mount source path '/opt/buildagent/temp/buildTmp': mkdir /opt/buildagent: read-only file system.
+  #        volumeMounts:
+  #          - name: var-run-docker-sock
+  #            mountPath: /var/run/docker.sock
+#      volumes:
+#        - name: var-run-docker-sock
+#          hostPath:
+#            path: /var/run/docker.sock
+#            type: Socket

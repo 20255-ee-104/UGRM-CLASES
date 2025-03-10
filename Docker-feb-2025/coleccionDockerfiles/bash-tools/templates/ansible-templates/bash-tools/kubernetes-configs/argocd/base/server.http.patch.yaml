@@ -1,0 +1,31 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2021-04-21 10:52:12 +0100 (Wed, 21 Apr 2021)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                      ArgoCD HTTP Patch for Nginx Ingress
+# ============================================================================ #
+
+# Don't do this except in a test lab where you don't want to bother
+# with full DNS + SSL automation (see adjacent Cert Manager and External DNS bases)
+
+# Apply:
+#
+#   run: kubectl patch deployment argocd-server --namespace argocd --type json --patch "$(cat server.http.patch.yaml)"
+
+---
+- op: add
+  path: /spec/template/spec/containers/0/command/-
+  value: --insecure

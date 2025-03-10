@@ -1,0 +1,65 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2023-05-06 15:24:21 +0100 (Sat, 06 May 2023)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                M e t a l   L B   I P   A d d r e s s   P o o l
+# ============================================================================ #
+
+# https://metallb.universe.tf/configuration/_advanced_ipaddresspool_configuration/
+
+# https://metallb.universe.tf/apis/#metallb.io/v1beta1.IPAddressPool
+
+---
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: NAME
+  namespace: metallb  # must match the namespace Metal LB was installed to
+spec:
+  addresses:
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    #- 192.168.9.1-192.168.9.5
+    #- fc00:f853:0ccd:e799::/124
+    #- 42.176.25.64/32
+  # prevent auto-assigning out expensive public IPv4 addresses if this IPAddressPool is configured for them
+  # in those cases you can assign them manually in the service annotation: metallb.universe.tf/loadBalancerIPs: 42.176.25.64
+  #autoAssign: false
+  # don't allocate .0 or .255 IPs in case of old buggy equipment miscalculating subnets and blocking them for smurf protection
+  avoidBuggyIPs: true
+
+  # pin IPAddressPool to only be used for certain namespaces or labels for multi-tenancy
+  #
+  #   https://metallb.universe.tf/configuration/_advanced_ipaddresspool_configuration/#reduce-scope-of-address-allocation-to-specific-namespace-and-service
+  #
+  #   https://metallb.universe.tf/apis/#metallb.io/v1beta1.ServiceAllocation
+  #
+  serviceAllocation:
+    # priority to use this IPAddressPool compared to other matching IPAddressPool's
+    priority: 50  # lower number = higher priority
+    # matches either namespace-a or namespace-b or any namespace with a label of 'foo: bar'
+    namespaces:
+      - namespace-a
+      - namespace-b
+    namespaceSelectors:
+      - matchLabels:
+          foo: bar
+    serviceSelectors:
+      - matchExpressions:
+          - key: app
+            operator: In
+            values:
+              - bar

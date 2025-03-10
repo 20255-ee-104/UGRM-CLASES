@@ -1,0 +1,70 @@
+#
+#  Author: Hari Sekhon
+#  Date: Wed Jun 9 11:57:27 2021 +0100
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn
+#  and optionally send me feedback to help improve or steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                   A r g o C D   I n g r e s s   -   G R P C
+# ============================================================================ #
+
+# https://argoproj.github.io/argo-cd/operator-manual/ingress/#option-2-multiple-ingress-objects-and-hosts
+
+# GRPC requires HTTP/2
+#
+# https://cloud.google.com/kubernetes-engine/docs/how-to/ingress-http2
+
+---
+#apiVersion: extensions/v1beta1  # old
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-grpc
+  namespace: argocd
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+    # deprecated, use ingressClassName under spec section for Kubernetes 1.18+
+    #kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "GRPCS"
+    # XXX: ignore the docs, don't do this, the nginx ingress controller change required breaks normal services
+    #nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+    # XXX: Edit to make available externally or apply common ingress.nginx.patch.yaml with shared IP list eg. Cloudflare
+    nginx.ingress.kubernetes.io/whitelist-source-range: |
+      10.0.0.0/8,
+      172.16.0.0/16,
+      192.168.0.0/16
+spec:
+  ingressClassName: nginx
+  # cert manager will auto-create SSL cert for this address and put it in named secret
+  tls:
+    # XXX: Edit
+    - hosts:
+        - argocd-grpc.DOMAIN.COM
+      secretName: argocd-server-grpc-tls  # XXX: docs are wrong, don't use argocd-secret, if changed later Cert Manager will wipe it out along with the other secrets in there!
+  rules:
+    # XXX: Edit
+    - host: argocd-grpc.DOMAIN.COM
+      http:
+        paths:
+          - path: /
+            pathType: Prefix  # for new networking.k8s.io/v1
+            backend:
+              #serviceName: argocd-server
+              #servicePort: https  # http requires server.http.patch.yaml to stop 302 redirects
+              service:
+                name: argocd-server
+                port:
+                  #number: 443
+                  name: https

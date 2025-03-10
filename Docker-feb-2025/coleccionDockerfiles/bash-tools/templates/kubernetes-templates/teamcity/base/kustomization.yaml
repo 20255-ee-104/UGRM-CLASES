@@ -1,0 +1,44 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2021-02-22 15:00:48 +0000 (Mon, 22 Feb 2021)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                  T e a m C i t y   K u s t o m i z a t i o n
+# ============================================================================ #
+
+# Ties all the TeamCity resources together for an easy one-shot deployment
+
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: teamcity
+
+resources:
+  - priorityclass.yaml
+  - storageclass-gcp-standard-resizeable.yaml
+  - namespace.yaml
+  - teamcity-agent.yaml
+  - teamcity-agent-cloudprofile-deployment.yaml
+  # XXX: Edit ingress address before uncommenting
+  #- teamcity-ingress.yaml
+  - teamcity-server-role.yaml
+  - teamcity-server-rolebinding.yaml
+  - teamcity-server-serviceaccount.yaml
+  - teamcity-server.yaml
+  - teamcity-service.yaml
+
+# done in namespace now
+#patchesStrategicMerge:
+#  - goldilocks-namespace-enable.patch.yaml

@@ -1,0 +1,112 @@
+#
+#  Author: Hari Sekhon
+#  Date: Sat Jan 15 09:35:18 2022 +0000
+#
+#  vim:ts=2:sts=2:sw=2:et
+#
+#  https://github.com/HariSekhon/GitHub-Actions
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+---
+name: Validation
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    ignore-paths:
+      - '**/README.md'
+  pull_request:
+    branches:
+      - master
+      - main
+    ignore-paths:
+      - '**/README.md'
+  workflow_call:
+    inputs:
+      # doesn't evaluate in time for container
+      #docker_image_tag:
+      #  type: string
+      #  required: true
+      #  default: latest
+      # workflow calls only permit string/boolean/number - https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#onworkflow_callinputsinput_idtype
+      env:
+        description: Environment variables in key=value pairs
+        type: string  # pass in string in export shell format eg. MYVAR=myvalue MYVAR2=myvalue2
+        default: ''
+        required: false
+      submodules:
+        type: string
+        required: false
+        default: recursive
+      debug:
+        description: Debug Mode, true or false
+        type: string
+        required: false
+        default: false
+  workflow_dispatch:
+    inputs:
+      submodules:
+        type: string
+        required: false
+        default: recursive
+      debug:
+        type: boolean
+        required: false
+        default: false
+  schedule:
+    - cron: '0 0 * * 1'
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash -euxo pipefail {0}
+
+env:
+  INPUTS: ${{ inputs.env }}
+  DEBUG: ${{ inputs.debug == true || github.event.inputs.debug == 'true' || '' }}
+
+jobs:
+  validate:
+    name: Validate
+    # github.event.repository.fork isn't available in scheduled workflows
+    # can't prevent forks of this repo, because also prevents caller workflows
+    #if: github.repository == 'HariSekhon/Github-Actions'
+    runs-on: ubuntu-latest
+    # PyTools contains some extra tools, eg. use validate_yaml.py if check_yaml.sh yamllint dependencies aren't available
+    # inputs evaluates to blank and fails to pull - not available at this stage
+    #container: harisekhon/pytools:${{ inputs.docker_image_tag }}
+    #container: harisekhon/pytools:debian
+    container: harisekhon/pytools:centos
+    #container: harisekhon/bash-tools:latest
+    steps:
+      - name: Environment
+        run: env | sort
+
+      - name: Git version
+        run: git --version
+
+      - uses: actions/checkout@v3
+        with:
+          submodules: ${{ inputs.submodules }}  # 'recursive' default requires Git 2.18+ to be installed first
+
+      - name: Setup environment variables
+        run: |
+          echo "$INPUTS" >> "$GITHUB_ENV"
+
+      - name: Environment
+        run: env | sort
+
+      - name: Validate
+        run: |
+          if [ -f .validate.env ]; then
+            source .validate.env
+          fi
+          check_all.sh

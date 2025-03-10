@@ -1,0 +1,24 @@
+[submodule "kubernetes-templates"]
+	path = kubernetes-templates
+	url = https://github.com/HariSekhon/Kubernetes-templates
+[submodule "terraform"]
+	path = terraform-templates
+	url = https://github.com/HariSekhon/Terraform-templates
+[submodule "jenkins"]
+	path = jenkins
+	url = https://github.com/HariSekhon/Jenkins
+	branch = master
+[submodule "github-actions"]
+	path = github-actions
+	url = https://github.com/HariSekhon/GitHub-Actions
+	branch = master
+[submodule "packer-templates"]
+	path = packer-templates
+	url = https://github.com/HariSekhon/Packer-templates
+	branch = main
+[submodule "vagrant-templates"]
+	path = vagrant-templates
+	url = https://github.com/HariSekhon/Vagrant-templates
+[submodule "ansible-templates"]
+	path = ansible-templates
+	url = https://github.com/HariSekhon/Ansible.git

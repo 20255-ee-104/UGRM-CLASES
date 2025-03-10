@@ -1,0 +1,55 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2021-06-10 10:35:49 +0100 (Thu, 10 Jun 2021)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                  A r g o C D   A p p - o f - P r o j e c t s
+# ============================================================================ #
+
+# https://argo-cd.readthedocs.io/en/stable/operator-manual/cluster-bootstrapping/#app-of-apps-pattern
+
+# auto-tracks and loads ArgoCD projects
+
+# if projects managed like this were manually precreated it may result in a stuck spinning state in the 'projects' app tree view waiting to delete project state
+# - to clear this you'd have to delete the project which may require deleting the apps, which may require disabling argocd app auto-sync, apps auto-sync,
+#   deleting all apps in the project (watch out none have finalizers to cascading delete your deployments), and then kubectl delete appproject $project -n argocd
+
+# shows secrets and non-managed appprojects in argocd namespace as orphans, but does not remove them when pruning as they were never managed by this app
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: projects
+  namespace: argocd  # must be whichever namespace you installed ArgoCD to - usually 'argocd' by default
+  # don't enable finalizer otherwise it'll cause a cascading delete of projects if this app is removed
+  #finalizers:
+  #  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    # XXX: Edit - url to Git repo containing your k8s manifests
+    repoURL: https://github.com/argoproj/argocd-example-apps.git  # keep .git suffix for GitLab, otherwise it'll 301 redirect which ArgoCD doesn't follow
+    targetRevision: HEAD
+    # XXX: Edit - path to argocd project configuration yamls
+    path: argocd/projects  # relative to root of git repo so no leading slash
+  destination:
+    server: https://kubernetes.default.svc
+    #name: in-cluster
+    namespace: argocd
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: false   # safe by default

@@ -1,0 +1,73 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2021-04-21 10:52:12 +0100 (Wed, 21 Apr 2021)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                    P r e e m p t i b l e   C r o n J o b s
+# ============================================================================ #
+
+# Use to patch all CronJobs to be preemptible eg. on dev / staging environments
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ignored
+  annotations:
+    checkov.io/skip1: CKV_K8S_21=breaks kustomize patching of base
+spec:
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          affinity:
+            nodeAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+                # GCP: https://cloud.google.com/kubernetes-engine/docs/how-to/preemptible-vms#best_practices
+                - weight: 100
+                  preference:
+                    matchExpressions:
+                      # gke-preemptible not valid on GKE AutoPilot clusters - remove in that case and leave only gke-spot
+                      - key: cloud.google.com/gke-preemptible
+                        operator: Exists
+                      - key: cloud.google.com/gke-spot
+                        operator: Exists
+                # AWS: https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html
+                - weight: 100
+                  preference:
+                    matchExpressions:
+                      - key: eks.amazonaws.com/capacityType
+                        operator: In
+                        values:
+                          - SPOT
+                # Azure: https://docs.microsoft.com/en-us/azure/aks/spot-node-pool
+                - weight: 100
+                  preference:
+                    matchExpressions:
+                      - key: kubernetes.azure.com/scalesetpriority
+                        operator: In
+                        values:
+                          - spot
+          tolerations:
+            # XXX: this must be set yourself on AWS EKS / GCP GKE
+            - key: preemptible
+              operator: Equal
+              value: "true"
+              effect: NoSchedule
+            # automatically set on Azure AKS
+            - key: kubernetes.azure.com/scalesetpriority
+              operator: Equal
+              value: spot
+              effect: NoSchedule

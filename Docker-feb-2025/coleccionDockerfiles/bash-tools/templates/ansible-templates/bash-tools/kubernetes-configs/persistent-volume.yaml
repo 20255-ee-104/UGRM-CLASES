@@ -1,0 +1,40 @@
+#
+#  Author: Hari Sekhon
+#  Date: [% DATE  # 2019-11-27 12:19:45 +0000 (Wed, 27 Nov 2019) %]
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn
+#  and optionally send me feedback to help improve or steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                       P e r s i s t e n t   V o l u m e
+# ============================================================================ #
+
+# https://kubernetes.io/docs/concepts/storage/persistent-volumes/
+
+# https://kubernetes.io/docs/reference/kubernetes-api/config-and-storage-resources/persistent-volume-v1/
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: APP-pv
+  namespace: NAMESPACE
+spec:
+  storageClassName: ""
+  capacity:
+    storage: 10G
+  accessModes:
+    - ReadOnlyMany
+  gcePersistentDisk:
+    pdName: APP-disk
+    fsType: ext4

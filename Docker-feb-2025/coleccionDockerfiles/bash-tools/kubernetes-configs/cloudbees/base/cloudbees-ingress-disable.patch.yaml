@@ -1,0 +1,46 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2022-01-07 18:01:51 +0000 (Fri, 07 Jan 2022)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# Disables the CloudBees Core CI ingress so it doesn't forward through the Nginx Ingress
+
+# Workaround for the fact you can't delete an entire yaml config via JSON patch
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cjoc
+  annotations:
+    checkov.io/skip1: CKV_K8S_21=breaks kustomize patching of base
+  #namespace: cloudbees-core   # don't specify namespace, won't match as the namespace is applied later
+spec:
+  ingressClassName: disabled  # default: nginx
+  #rules:
+  #  - http:
+  #      paths:
+  #        - path: /cjoc
+  #          pathType: Prefix
+  #          backend:
+  #            #serviceName: cjoc
+  #            #servicePort: 80
+  #            service:
+  #              name: cjoc
+  #              port:
+  #                number: 80
+  #        #- backend:
+  #        #    serviceName: cjoc
+  #        #    servicePort: 80
+  #        #  path: /cjoc/*

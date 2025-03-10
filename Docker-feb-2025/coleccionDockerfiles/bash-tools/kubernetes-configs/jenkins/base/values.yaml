@@ -1,0 +1,682 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2021-12-17 16:22:51 +0000 (Fri, 17 Dec 2021)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#               J e n k i n s   H e l m   C h a r t   V a l u e s
+# ============================================================================ #
+
+# https://github.com/jenkinsci/helm-charts/blob/main/charts/jenkins/README.md
+#
+# https://github.com/jenkinsci/helm-charts/blob/main/charts/jenkins/VALUES_SUMMARY.md
+
+# helm repo add jenkins https://charts.jenkins.io
+#
+# helm show values jenkins/jenkins >> values.yaml
+
+---
+controller:
+  #image: "jenkins/jenkins"
+  # tag: "2.319.1-jdk11"
+  #tagLabel: jdk11
+  #imagePullPolicy: "Always"
+  #imagePullSecretName:
+  numExecutors: 0
+  resources:
+    requests:
+      cpu: 1
+      memory: 6Gi
+    limits:
+      cpu: 2
+      memory: 6Gi
+
+  # XXX: uncomment after initial deployment to prevent the helm chart from recreating this secret on every kustomize build
+  # which breaks the admin login via ArgoCD sync:
+  #
+  #   https://github.com/jenkinsci/helm-charts/issues/1026
+  #
+  #admin:
+  #  existingSecret: jenkins
+
+  # Overrides the init container default values
+  # initContainerResources:
+  #   requests:
+  #     cpu: "50m"
+  #     memory: "256Mi"
+  #   limits:
+  #     cpu: "2000m"
+  #     memory: "4096Mi"
+  # Environment variables that get added to the init container (useful for e.g. http_proxy)
+  # initContainerEnv:
+  #   - name: http_proxy
+  #     value: "http://192.168.64.1:3128"
+  # containerEnv:
+  #   - name: http_proxy
+  #     value: "http://192.168.64.1:3128"
+  javaOpts: -Xms5G -Xmx5G -XX:+AlwaysPreTouch -XX:+UseStringDeduplication -XX:+ParallelRefProcEnabled -XX:+DisableExplicitGC
+  # jenkinsOpts: ""
+  # If you are using the ingress definitions provided by this chart via the `controller.ingress` block the configured hostname will be the ingress hostname starting with `https://` or `http://` depending on the `tls` configuration.
+  # The Protocol can be overwritten by specifying `controller.jenkinsUrlProtocol`.
+  # jenkinsUrlProtocol: "https"
+  # If you are not using the provided ingress you can specify `controller.jenkinsUrl` to change the url definition.
+  # jenkinsUrl: ""
+  # If you set this prefix and use ingress controller then you might want to set the ingress path below
+  # jenkinsUriPrefix: "/jenkins"
+  # Enable pod security context (must be `true` if podSecurityContextOverride, runAsUser or fsGroup are set)
+  usePodSecurityContext: true
+  # Note that `runAsUser`, `fsGroup`, and `securityContextCapabilities` are
+  # being deprecated and replaced by `podSecurityContextOverride`.
+  # Set runAsUser to 1000 to let Jenkins run as non-root user 'jenkins' which exists in 'jenkins/jenkins' docker image.
+  # When setting runAsUser to a different value than 0 also set fsGroup to the same value:
+  runAsUser: 1000
+  fsGroup: 1000
+  # If you have PodSecurityPolicies that require dropping of capabilities as suggested by CIS K8s benchmark, put them here
+  securityContextCapabilities: {}
+  #  drop:
+  #    - NET_RAW
+  # Completely overwrites the contents of the `securityContext`, ignoring the
+  # values provided for the deprecated fields: `runAsUser`, `fsGroup`, and
+  # `securityContextCapabilities`.  In the case of mounting an ext4 filesystem,
+  # it might be desirable to use `supplementalGroups` instead of `fsGroup` in
+  # the `securityContext` block: https://github.com/kubernetes/kubernetes/issues/67014#issuecomment-589915496
+  # podSecurityContextOverride:
+  #   runAsUser: 1000
+  #   runAsNonRoot: true
+  #   supplementalGroups: [1000]
+  #   # capabilities: {}
+  # Container securityContext
+  containerSecurityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+  serviceType: ClusterIP
+
+  # for GKE Autopilot, which seems to launch additional nodes without enough RAM leaving Jenkins master pod unscheduleable - used standard cluster for Jenkins instead
+  #
+  #   https://cloud.google.com/kubernetes-engine/docs/concepts/autopilot-compute-classes#when-to-use
+  #
+  #nodeSelector:
+  #  cloud.google.com/compute-class: Balanced
+
+  podAnnotations:
+    cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+
+  podDisruptionBudget:
+    enabled: false
+    # For Kubernetes v1.5+, use 'policy/v1beta1'
+    # For Kubernetes v1.21+, use 'policy/v1'
+    apiVersion: "policy/v1"
+    # maxUnavailable: "0"
+
+  agentListenerEnabled: true
+  agentListenerPort: 50000
+
+  # LoadBalancerSourcesRange is a list of allowed CIDR values, which are combined with ServicePort to
+  # set allowed inbound rules on the security group assigned to the controller load balancer
+  loadBalancerSourceRanges:
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    # Optionally assign a known public LB IP
+    # loadBalancerIP: 1.2.3.4
+
+  # List of plugins to be installed during Jenkins controller start
+  #
+  # changing this triggers a jenkins restart, but the configmap may be updated after the jenkins pod starts, so you may need to:
+  #
+  #   kubectl rollout restart sts -n jenkins jenkins
+  #
+  # XXX: avoid suffixing :<version> to each plugin unless you have a strong reason to because
+  #      this can cause serious problems such as the Credentials plugin being installed but disabled, breaking many other plugins
+  #      Instead let them auto-upgrade to the latest version that'll work on your version of Jenkins at install time (you'll want to keep plugins up to date anyway)
+  installPlugins:
+    - ansicolor                                         # https://plugins.jenkins.io/ansicolor/
+    - antisamy-markup-formatter                         # https://plugins.jenkins.io/antisamy-markup-formatter/
+    - blueocean                                         # https://plugins.jenkins.io/blueocean/
+    - build-timeout                                     # https://plugins.jenkins.io/build-timeout/
+    - build-timestamp                                   # https://plugins.jenkins.io/build-timestamp/
+    - calendar-view                                     # https://plugins.jenkins.io/calendar-view/
+    - cloudbees-jenkins-advisor                         # https://plugins.jenkins.io/cloudbees-jenkins-advisor/
+    - configuration-as-code                             # https://plugins.jenkins.io/configuration-as-code/
+    #- credentials-binding                              # https://plugins.jenkins.io/credentials-binding/  # pulled by Pipelines and secret manager keystores
+    - cron_column                                       # https://plugins.jenkins.io/cron_column/
+    - discard-old-build                                 # https://plugins.jenkins.io/discard-old-build/
+    - disk-usage                                        # https://plugins.jenkins.io/disk-usage/
+    - git                                               # https://plugins.jenkins.io/git/
+    - github                                            # https://plugins.jenkins.io/github/
+    #- jfrog                                            # https://plugins.jenkins.io/jfrog/
+    - jobConfigHistory                                  # https://plugins.jenkins.io/jobConfigHistory/  # Saves every job config change, like local VCS. See also the Jenkins job to auto-backport job XMLs to Git in https://github.com/HariSekhon/Jenkins
+    - kubernetes                                        # https://plugins.jenkins.io/kubernetes/
+    - lockable-resources                                # https://plugins.jenkins.io/lockable-resources/
+    #- pipeline-github-lib                              # https://plugins.jenkins.io/pipeline-github-lib/  # to allow dynamic loading for public github libraries via: @Library('github.com/HariSekhon/Jenkins') _  # should be pulled in automatically by Pipeline plugins as a dependency
+    - plugin-usage-plugin                               # https://plugins.jenkins.io/plugin-usage-plugin/
+    - slack                                             # https://plugins.jenkins.io/slack/
+    - ssh-agent                                         # https://plugins.jenkins.io/ssh-agent/
+    #- ssh-slaves                                       # https://plugins.jenkins.io/ssh-slaves/  # Not needed on Kubernetes, old way of having VMs SSH'd to launch agents
+    - thinBackup                                        # https://plugins.jenkins.io/thinBackup/
+    - timestamper                                       # https://plugins.jenkins.io/timestamper/
+    - view-job-filters                                  # https://plugins.jenkins.io/view-job-filters/
+    - workflow-aggregator                               # https://plugins.jenkins.io/workflow-aggregator/  # Pipelines
+    #- workflow-job                                     # https://plugins.jenkins.io/workflow-job/  # included by Pipelines
+    # ==================================================
+    # SSO
+    - saml                                              # https://plugins.jenkins.io/saml/  # use instead of Azure AD plugin which is EOL Feb 2024
+    - google-login                                      # https://plugins.jenkins.io/google-login/
+    #- ldap                                             # https://plugins.jenkins.io/ldap/
+    #- matrix-auth                                      # https://plugins.jenkins.io/matrix-auth/
+    #- pam-auth                                         # https://plugins.jenkins.io/pam-auth/
+    # ==================================================
+    # Code Quality
+    #- clover                                           # https://plugins.jenkins.io/clover/
+    - sonar                                             # https://plugins.jenkins.io/sonar/
+    - allure-jenkins-plugin                             # https://plugins.jenkins.io/allure-jenkins-plugin/
+    # ==================================================
+    # Cloud & Credentials
+    # gives AWSAccessKeyId and AWSSecretKey fields in Jenkins Credentials API
+    - aws-credentials                                   # https://plugins.jenkins.io/aws-credentials/
+    - aws-secrets-manager-credentials-provider          # https://plugins.jenkins.io/aws-secrets-manager-credentials-provider/
+    - azure-credentials                                 # https://plugins.jenkins.io/azure-credentials/
+    - azure-keyvault                                    # https://plugins.jenkins.io/azure-keyvault/
+    - hashicorp-vault-plugin                            # https://plugins.jenkins.io/hashicorp-vault-plugin/
+    - gcp-secrets-manager-credentials-provider          # https://plugins.jenkins.io/gcp-secrets-manager-credentials-provider/
+    - google-cloudbuild                                 # https://plugins.jenkins.io/google-cloudbuild/
+    #- google-oauth-plugin                              # https://plugins.jenkins.io/google-oauth-plugin/
+    #- google-source-plugin                             # https://plugins.jenkins.io/google-source-plugin/
+    #- google-kubernetes-engine                         # https://plugins.jenkins.io/google-kubernetes-engine/  # deploy to GKE, use ArgoCD instead
+    #- google-storage-plugin                            # https://plugins.jenkins.io/google-storage-plugin/  # upload/download from GCS
+    #- codedeploy                                       # https://plugins.jenkins.io/codedeploy/  # AWS CodeDeploy
+    # ==================================================
+    # Metrics
+    # cloudbees for prometheus plugin to get disk usage from instead of scanning cloud storage itself or disabling disk space reporting
+    - cloudbees-disk-usage-simple                       # https://plugins.jenkins.io/cloudbees-disk-usage-simple/
+    - monitoring                                        # https://plugins.jenkins.io/monitoring/
+    - opentelemetry                                     # https://plugins.jenkins.io/opentelemetry/  # for Jaeger
+    - prometheus                                        # https://plugins.jenkins.io/prometheus/
+    # ==================================================
+    # Languages & Build Systems - supports downloading specific JDK & build tool version
+    #
+    #   usually more efficient than doing the download in pipeline code because it's downloaded once to the Jenkins server and then distributed locally to agents as they spawn
+    #
+    #- ant                                              # https://plugins.jenkins.io/ant/
+    #- gradle                                           # https://plugins.jenkins.io/gradle/
+    #- groovy                                           # https://plugins.jenkins.io/groovy/
+    #- pyenv-pipeline                                   # https://plugins.jenkins.io/pyenv-pipeline/
+    #- junit                                            # https://plugins.jenkins.io/junit/
+    #- maven-plugin                                     # https://plugins.jenkins.io/maven-plugin/
+    #- nodejs                                           # https://plugins.jenkins.io/nodejs/
+    # ==================================================
+    #- Office-365-Connector                             # https://plugins.jenkins.io/Office-365-Connector/
+    #- bouncycastle-api                                 # https://plugins.jenkins.io/bouncycastle-api/
+    #- cctray-xml                                       # https://plugins.jenkins.io/cctray-xml/  # provides the /cc.xml/ endpoint for CCMenu and similar desktop notification tools
+    #- cloudbees-folder                                 # https://plugins.jenkins.io/cloudbees-folder/
+    #- compress-artifacts                               # https://plugins.jenkins.io/compress-artifacts/
+    #- conditional-buildstep                            # https://plugins.jenkins.io/conditional-buildstep/  # useless for Pipeline jobs, only useful to old freestyle jobs, and not flexible enough for change freeze periods either
+    #- dashboard-view                                   # https://plugins.jenkins.io/dashboard-view/
+    #- email-ext                                        # https://plugins.jenkins.io/email-ext/
+    #- external-monitor-job                             # https://plugins.jenkins.io/external-monitor-job/
+    #- greenballs                                       # https://plugins.jenkins.io/greenballs/  # not used in recent versions due to UI change
+    #- github-pullrequest                               # https://plugins.jenkins.io/github-pullrequest/
+    #- javadoc                                          # https://plugins.jenkins.io/javadoc/
+    #- jira                                             # https://plugins.jenkins.io/jira/
+    #- jquery-detached                                  # https://plugins.jenkins.io/jquery-detached/
+    #- mask-passwords                                   # https://plugins.jenkins.io/mask-passwords/  # shouldn't need this if you're using the credentials plugin properly Jenkins redacts in logs
+    #- mailer                                           # https://plugins.jenkins.io/mailer/
+    #- metrics                                          # https://plugins.jenkins.io/metrics/
+    #- pagerduty                                        # https://plugins.jenkins.io/pagerduty/
+    #- role-strategy                                    # https://plugins.jenkins.io/role-strategy/  # don't need this if using Azure AD plugin matrix-based security
+    #- terraform                                        # https://plugins.jenkins.io/terraform/
+    #- view-job-filters                                 # https://plugins.jenkins.io/view-job-filters/
+    #- ws-cleanup                                       # https://plugins.jenkins.io/ws-cleanup/  # shouldn't need workspace cleanup in this config using ephemeral agents
+
+  installLatestPlugins: true
+  installLatestSpecifiedPlugins: true
+
+  # List of plugins to install in addition to those listed in controller.installPlugins
+  additionalPlugins: []
+
+  # Enable to initialize the Jenkins controller only once on initial installation.
+  # Without this, whenever the controller gets restarted (Evicted, etc.) it will fetch plugin updates which has the potential to cause breakage.
+  # Note that for this to work, `persistence.enabled` needs to be set to `true`
+  initializeOnce: true
+
+  # Enable to always override the installed plugins with the values of 'controller.installPlugins' on upgrade or redeployment.
+  # overwritePlugins: true
+
+  # Configures if plugins bundled with `controller.image` should be overwritten with the values of 'controller.installPlugins' on upgrade or redeployment.
+  overwritePluginsFromImage: true
+
+  # Used to approve a list of groovy functions in pipelines used the script-security plugin. Can be viewed under /scriptApproval
+  scriptApproval: []
+  #  - "method groovy.json.JsonSlurperClassic parseText java.lang.String"
+  #  - "new groovy.json.JsonSlurperClassic"
+  # List of groovy init scripts to be executed during Jenkins controller start
+  initScripts: []
+  #  - |
+  #    print 'adding global pipeline libraries, register properties, bootstrap jobs...'
+
+  # 'name' is a name of an existing secret in same namespace as jenkins,
+  # 'keyName' is the name of one of the keys inside current secret.
+  # the 'name' and 'keyName' are concatenated with a '-' in between, so for example:
+  # an existing secret "secret-credentials" and a key inside it named "github-password" should be used in Jcasc as ${secret-credentials-github-password}
+  # 'name' and 'keyName' must be lowercase RFC 1123 label must consist of lower case alphanumeric characters or '-',
+  # and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc')
+  additionalExistingSecrets: []
+  #  - name: secret-name-1
+  #    keyName: username
+  #  - name: secret-name-1
+  #    keyName: password
+
+  additionalSecrets: []
+  #  - name: nameOfSecret
+  #    value: secretText
+
+  # Generate SecretClaim resources in order to create Kubernetes secrets from HashiCorp Vault using kube-vault-controller.
+  # 'name' is name of the secret that will be created in Kubernetes. The Jenkins fullname is prepended to this value.
+  # 'path' is the fully qualified path to the secret in Vault
+  # 'type' is an optional Kubernetes secret type. Defaults to 'Opaque'
+  # 'renew' is an optional secret renewal time in seconds
+  secretClaims: []
+  # - name: secretName        # required
+  #   path: testPath          # required
+  #   type: kubernetes.io/tls # optional
+  #   renew: 60               # optional
+
+  # Name of default cloud configuration.
+  cloudName: "kubernetes"
+
+  # Below is the implementation of Jenkins Configuration as Code.  Add a key under configScripts for each configuration area,
+  # where each corresponds to a plugin or section of the UI.  Each key (prior to | character) is just a label, and can be any value.
+  # Keys are only used to give the section a meaningful name.  The only restriction is they may only contain RFC 1123 \ DNS label
+  # characters: lowercase letters, numbers, and hyphens.  The keys become the name of a configuration yaml file on the controller in
+  # /var/jenkins_home/casc_configs (by default) and will be processed by the Configuration as Code Plugin.  The lines after each |
+  # become the content of the configuration yaml file.  The first line after this is a JCasC root element, eg jenkins, credentials,
+  # etc.  Best reference is https://<jenkins_url>/configuration-as-code/reference.  The example below creates a welcome message:
+  #
+  # How to add jobs to JCasC:
+  #
+  #     https://github.com/jenkinsci/helm-charts/issues/28
+  #
+  # JCasC materializes as a horrible big embedded string making Kustomize patching difficult eg. to add different NFS mounts per environment overlay
+  #
+  #     https://github.com/jenkinsci/helm-charts/issues/1024
+  #
+  # This override per environment see ../overlay/jcasc-cm.patch.yaml which completely replaces this defaultConfig
+  #
+  #     https://github.com/jenkinsci/helm-charts/issues/1025
+  #
+  JCasC:
+    defaultConfig: true  # set to false if using the ../overlay/jcasc-cm.patch.yaml instead because all of this would be wholesale replaced as a string field in the configmap
+    # XXX: populate JCasC configScripts from a running configured instance and backport it here
+    #
+    #      install 'Configuration as Code' plugin, then get live config from Manage Jenkins -> Configuration as Code -> View Configuration:
+    #
+    #         $JENKINS_URL/manage/configuration-as-code/viewExport
+    #
+    #      Documentation:
+    #
+    #         https://www.jenkins.io/doc/book/managing/casc/
+    #
+    configScripts: {}
+    #  welcome-message: |
+    #    jenkins:
+    #      systemMessage: Welcome to our CI\CD server.  This Jenkins is configured and managed 'as code'.
+    # Ignored if securityRealm is defined in controller.JCasC.configScripts and
+    # ignored if controller.enableXmlConfig=true as controller.securityRealm takes precedence
+    securityRealm: |-
+      local:
+        allowsSignup: false
+        enableCaptcha: false
+        users:
+        - id: "${chart-admin-username}"
+          name: "Jenkins Admin"
+          password: "${chart-admin-password}"
+    # Ignored if authorizationStrategy is defined in controller.JCasC.configScripts
+    authorizationStrategy: |-
+      loggedInUsersCanDoAnything:
+        allowAnonymousRead: false
+  # Optionally specify additional init-containers
+  customInitContainers: []
+  # - name: custom-init
+  #   image: "alpine:3.7"
+  #   imagePullPolicy: Always
+  #   command: [ "uname", "-a" ]
+
+  sidecars:
+    configAutoReload:
+      # If enabled: true, Jenkins Configuration as Code will be reloaded on-the-fly without a reboot.  If false or not-specified,
+      # jcasc changes will cause a reboot and will only be applied at the subsequent start-up.  Auto-reload uses the
+      # http://<jenkins_url>/reload-configuration-as-code endpoint to reapply config when changes to the configScripts are detected.
+      enabled: true
+      image: kiwigrid/k8s-sidecar:1.14.2
+      imagePullPolicy: IfNotPresent
+      resources: {}
+        #   requests:
+        #     cpu: 50m
+        #     memory: 50Mi
+        #   limits:
+        #     cpu: 100m
+        #     memory: 100Mi
+      # How many connection-related errors to retry on
+      reqRetryConnect: 10
+      # env:
+      #   - name: REQ_TIMEOUT
+      #     value: "30"
+      # SSH port value can be set to any unused TCP port.  The default, 1044, is a non-standard SSH port that has been chosen at random.
+      # Is only used to reload jcasc config from the sidecar container running in the Jenkins controller pod.
+      # This TCP port will not be open in the pod (unless you specifically configure this), so Jenkins will not be
+      # accessible via SSH from outside of the pod.  Note if you use non-root pod privileges (runAsUser & fsGroup),
+      # this must be > 1024:
+      sshTcpPort: 1044
+      # folder in the pod that should hold the collected dashboards:
+      folder: "/var/jenkins_home/casc_configs"
+      # If specified, the sidecar will search for JCasC config-maps inside this namespace.
+      # Otherwise the namespace in which the sidecar is running will be used.
+      # It's also possible to specify ALL to search in all namespaces:
+      # searchNamespace:
+      containerSecurityContext:
+        readOnlyRootFilesystem: true
+        allowPrivilegeEscalation: false
+
+    # Allows you to inject additional/other sidecars
+    other: []
+    ## The example below runs the client for https://smee.io as sidecar container next to Jenkins,
+    ## that allows to trigger build behind a secure firewall.
+    ## https://jenkins.io/blog/2019/01/07/webhook-firewalls/#triggering-builds-with-webhooks-behind-a-secure-firewall
+    ##
+    ## Note: To use it you should go to https://smee.io/new and update the url to the generete one.
+    # - name: smee
+    #   image: docker.io/twalter/smee-client:1.0.2
+    #   args: ["--port", "{{ .Values.controller.servicePort }}", "--path", "/github-webhook/", "--url", "https://smee.io/new"]
+    #   resources:
+    #     requests:
+    #       cpu: 10m
+    #       memory: 32Mi
+    #     limits:
+    #       cpu: 50m
+    #       memory: 128Mi
+
+  affinity:
+    # avoid preemption which can cause build failures
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              # gke-preemptible not valid on GKE AutoPilot clusters - remove in that case and leave only gke-spot
+              - key: cloud.google.com/gke-preemptible
+                operator: DoesNotExist
+              - key: cloud.google.com/gke-spot
+                operator: DoesNotExist
+              - key: eks.amazonaws.com/capacityType
+                operator: NotIn
+                values:
+                  - SPOT
+              - key: kubernetes.azure.com/scalesetpriority
+                operator: NotIn
+                values:
+                  - spot
+  #priorityClassName: high-priority  # created by jenkins-kustomization.yaml
+
+  ingress:
+    enabled: false
+    # Override for the default paths that map requests to the backend
+    paths: []
+    # - backend:
+    #     serviceName: ssl-redirect
+    #     servicePort: use-annotation
+    # - backend:
+    #     serviceName: >-
+    #       {{ template "jenkins.fullname" . }}
+    #     # Don't use string here, use only integer value!
+    #     servicePort: 8080
+    # For Kubernetes v1.14+, use 'networking.k8s.io/v1beta1'
+    # For Kubernetes v1.19+, use 'networking.k8s.io/v1'
+    apiVersion: "extensions/v1beta1"
+    labels: {}
+    annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+    # For Kubernetes >= 1.18 you should specify the ingress-controller via the field ingressClassName
+    # See https://kubernetes.io/blog/2020/04/02/improvements-to-the-ingress-api-in-kubernetes-1.18/#specifying-the-class-of-an-ingress
+    # ingressClassName: nginx
+    # Set this path to jenkinsUriPrefix above or use annotations to rewrite path
+    # path: "/jenkins"
+    # configures the hostname e.g. jenkins.example.com
+    hostName:
+    tls:
+    # - secretName: jenkins.cluster.local
+    #   hosts:
+    #     - jenkins.cluster.local
+
+  # often you want to have your controller all locked down and private
+  # but you still want to get webhooks from your SCM
+  # A secondary ingress will let you expose different urls
+  # with a differnt configuration
+  secondaryingress:
+    enabled: false
+    # paths you want forwarded to the backend
+    # ex /github-webhook
+    paths: []
+    # For Kubernetes v1.14+, use 'networking.k8s.io/v1beta1'
+    # For Kubernetes v1.19+, use 'networking.k8s.io/v1'
+    apiVersion: "extensions/v1beta1"
+    labels: {}
+    annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+    # For Kubernetes >= 1.18 you should specify the ingress-controller via the field ingressClassName
+    # See https://kubernetes.io/blog/2020/04/02/improvements-to-the-ingress-api-in-kubernetes-1.18/#specifying-the-class-of-an-ingress
+    # ingressClassName: nginx
+    # configures the hostname e.g. jenkins-external.example.com
+    hostName:
+    tls:
+    # - secretName: jenkins-external.example.com
+    #   hosts:
+    #     - jenkins-external.example.com
+
+  # Expose Prometheus metrics
+  prometheus:
+    # If enabled, add the prometheus plugin to the list of plugins to install
+    # https://plugins.jenkins.io/prometheus
+    enabled: false # default: true - needs to have Prometheus component installed first, otherwise gets this error:
+                   # no matches for kind "ServiceMonitor" in version "monitoring.coreos.com/v1"
+    scrapeInterval: 60s
+    # This is the default endpoint used by the prometheus plugin
+    scrapeEndpoint: /prometheus
+    # An array of prometheus alerting rules
+    # See here: https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/
+    # The `groups` root object is added by default, simply add the rule entries
+    alertingrules: []
+
+agent:
+  enabled: true
+  podName: jenkins-agent
+  # URL for connecting to the Jenkins contoller
+  #jenkinsUrl:
+  #namespace:
+  #image: "jenkins/inbound-agent"
+  #tag: "4.11-1"
+  alwaysPullImage: false
+  # if resetting the 'ENTRYPOINT []' in the Dockerfile for a jenkins/inbound-agent derived image to support old freestyle jobs which cannot set default container
+  # generally shouldn't need to do this as jobs exec into the running container so usually fine to leave the entrypoint in a derived image
+  #command: /usr/local/bin/jenkins-agent
+  #workingDir: "/home/jenkins/agent"
+  #privileged: false
+  #resources:
+  #  requests:
+  #    cpu: "512m"
+  #    memory: "512Mi"
+  #  limits:
+  #    cpu: "512m"
+  #    memory: "512Mi"
+  #
+  # Controls how agent pods are retained after the Jenkins build completes
+  # Possible values: Always, Never, OnFailure
+  podRetention: "Never"
+  # Disable if you do not want the Yaml the agent pod template to show up
+  # in the job Console Output. This can be helpful for either security reasons
+  # or simply to clean up the output to make it easier to read.
+  showRawYaml: true
+
+  # Max number of spawned agent
+  containerCap: 10  # XXX: Edit
+  # Allows the Pod to remain active for reuse until the configured number of
+  # minutes has passed since the last step was executed on it.
+  idleMinutes: 0
+  # Raw yaml template for the Pod. For example this allows usage of toleration for agent pods.
+  # https://github.com/jenkinsci/kubernetes-plugin#using-yaml-to-define-pod-templates
+  # https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/
+  yamlTemplate: |-
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      annotations:
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+  # Defines how the raw yaml field gets merged with yaml definitions from inherited pod templates: merge or override
+  #yamlMergeStrategy: "override"
+  yamlMergeStrategy: "merge"
+  # Timeout in seconds for an agent to be online
+  connectTimeout: 100
+
+  #additionalContainers:
+  #  # has to be called 'sideContainerName' not 'name' othewise it comes out blank
+  #  - sideContainerName: MYAPP
+  #    image: europe-west2-docker.pkg.dev/<MY)_PROJECT>/<REPO>/<IMAGE>
+  #    tag: latest  # leaves behind a ':' suffix on the docker image if omitted - XXX: check the 'latest' tag exists as often it doesn't
+  #    alwaysPullImage: true
+  #    TTYEnabled: true
+  #    command: cat
+  #    # gets nasty to debug error if omitted
+  #    args: ""  # requires otherwise throws unintuitive - Error: accumulating resources: accumulation err='accumulating resources from '../base': '/Users/hari/github/kubernetes/jenkins/base' must resolve to a file': recursed accumulation of path '/Users/hari/github/kubernetes/jenkins/base': Error: template: jenkins/templates/jcasc-config.yaml:43:8: executing "jenkins/templates/jcasc-config.yaml" at <include "jenkins.casc.defaults" .>: error calling include: template: jenkins/templates/_helpers.tpl:184:10: executing "jenkins.casc.defaults" at <include "jenkins.casc.podTemplate" .>: error calling include: template: jenkins/templates/_helpers.tpl:391:55: executing "jenkins.casc.podTemplate" at <"^$">: invalid value; expected string
+  #    tty: true
+  #    privileged: false
+  #    resources:
+  #      requests:
+  #        cpu: 200m
+  #        memory: 256Mi
+  #      limits:
+  #        cpu: 200m
+  #        memory: 256Mi
+
+  # Below is the implementation of custom pod templates for the default configured kubernetes cloud.
+  # Add a key under podTemplates for each pod template. Each key (prior to | character) is just a label, and can be any value.
+  # Keys are only used to give the pod template a meaningful name.  The only restriction is they may only contain RFC 1123 \ DNS label
+  # characters: lowercase letters, numbers, and hyphens. Each pod template can contain multiple containers.
+  # For this pod templates configuration to be loaded the following values must be set:
+  # controller.JCasC.defaultConfig: true
+  # Best reference is https://<jenkins_url>/configuration-as-code/reference#Cloud-kubernetes. The example below creates a python pod template.
+  podTemplates: {}
+  #  python: |
+  #    - name: python
+  #      label: jenkins-python
+  #      serviceAccount: jenkins
+  #      containers:
+  #        - name: python
+  #          image: python:3
+  #          command: "/bin/sh -c"
+  #          args: "cat"
+  #          ttyEnabled: true
+  #          privileged: true
+  #          resourceRequestCpu: "400m"
+  #          resourceRequestMemory: "512Mi"
+  #          resourceLimitCpu: "1"
+  #          resourceLimitMemory: "1024Mi"
+  #
+  #volumes:
+  #- type: Secret
+  #  secretName: jenkins-mysecrets
+  #  mountPath: /var/run/secrets/jenkins-mysecrets
+
+# Here you can add additional agents
+# They inherit all values from `agent` so you only need to specify values which differ
+additionalAgents: {}
+#  maven:
+#    podName: maven
+#    customJenkinsLabels: maven
+#    # An example of overriding the jnlp container
+#    # sideContainerName: jnlp
+#    image: jenkins/jnlp-agent-maven
+#    tag: latest
+#  python:
+#    podName: python
+#    customJenkinsLabels: python
+#    sideContainerName: python
+#    image: python
+#    tag: "3"
+#    command: "/bin/sh -c"
+#    args: "cat"
+#    TTYEnabled: true
+
+persistence:
+  enabled: true
+  ## A manually managed Persistent Volume and Claim
+  ## Requires persistence.enabled: true
+  ## If defined, PVC must be created manually before volume will be bound
+  existingClaim:
+  ## jenkins data Persistent Volume Storage Class
+  ## If defined, storageClassName: <storageClass>
+  ## If set to "-", storageClassName: "", which disables dynamic provisioning
+  ## If undefined (the default) or set to null, no storageClassName spec is
+  ##   set, choosing the default provisioner.  (gp2 on AWS, standard on
+  ##   GKE, AWS & OpenStack)
+  ##
+  storageClass:
+  annotations: {}
+  labels: {}
+  accessMode: "ReadWriteOnce"
+  # failed to provision volume with StorageClass "standard-resizeable": rpc error: code = Internal desc = CreateVolume failed to create regional disk pvc-15225f6d-8eda-40de-964f-e492e64360b4: failed to insert regional disk: rpc error: code = Internal desc = unknown Insert disk error: googleapi: Error 400: Invalid value for field 'resource.sizeGb': '100'. Disk size cannot be smaller than 200 GB., invalid
+  #size: "200Gi"  # Cannot be less than 200GB on GCP regional disk, see error above
+  size: "10Gi"
+  volumes:
+  #  - name: nothing
+  #    emptyDir: {}
+  mounts:
+  #  - mountPath: /var/nothing
+  #    name: nothing
+  #    readOnly: true
+
+networkPolicy:
+  # Enable creation of NetworkPolicy resources.
+  enabled: false
+  # For Kubernetes v1.4, v1.5 and v1.6, use 'extensions/v1beta1'
+  # For Kubernetes v1.7, use 'networking.k8s.io/v1'
+  apiVersion: networking.k8s.io/v1
+  # You can allow agents to connect from both within the cluster (from within specific/all namespaces) AND/OR from a given external IP range
+  internalAgents:
+    allowed: true
+    podLabels: {}
+    namespaceLabels: {}
+      # project: myproject
+  externalAgents: {}
+  #   ipCIDR: 172.17.0.0/16
+  #   except:
+  #     - 172.17.1.0/24
+
+## Install Default RBAC roles and bindings
+rbac:
+  create: true
+  readSecrets: false
+
+serviceAccount:
+  create: true  # default: false
+  # The name of the service account is autogenerated by default
+  name:  # jenkins-agent
+
+serviceAccountAgent:
+  # Specifies whether a ServiceAccount should be created
+  create: true  # must be false if the same service account name is used as it's already created above
+  # The name of the ServiceAccount to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name:  # jenkins-agent

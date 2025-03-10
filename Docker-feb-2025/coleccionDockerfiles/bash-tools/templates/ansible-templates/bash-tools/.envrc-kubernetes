@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+#  vim:ts=4:sts=4:sw=4:et
+#
+#  Author: Hari Sekhon
+#  Date: 2021-02-25 10:10:53 +0000 (Thu, 25 Feb 2021)
+#
+#  https://github.com/HariSekhon/DevOps-Bash-tools
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                       K u b e r n e t e s   D i r E n v
+# ============================================================================ #
+
+# https://direnv.net/man/direnv-stdlib.1.html
+
+# See Also:
+#
+#   .envrc
+#   .envrc-aws
+#   .envrc-gcp
+
+# direnv stdlib - loads .envrc from parent dir up to /
+#
+# useful to accumulate parent and child directory .envrc settings eg. adding Kubernetes namespace, ArgoCD app etc.
+#
+# bypasses security authorization though - use with care
+#source_up
+#
+# source_up must be loaded before set -u otherwise gets this error:
+#
+#   direnv: loading .envrc
+#   /bin/bash: line 226: $1: unbound variable
+
+set -euo pipefail
+[ -n "${DEBUG:-}" ] && set -x
+
+arg="${1:-}"
+if [ "${arg##*/}" = "${BASH_SOURCE[0]##*/}" ]; then
+    shift
+fi
+
+# XXX: Edit this - hardcode for localized convenience
+CONTEXT="${1:-docker-desktop}"
+# if set will also set the namespace for extra convenience
+NAMESPACE="${2:-}"
+#NAMESPACE="jenkins"
+
+# function so can place in topdir .envrc and have subdirs 'source_up' or simply . ../.envrc to reuse this code among many .envrc environments
+kube_context(){
+    local context="$1"
+    local namespace="${2:-}"
+    if command -v kubectl &>/dev/null; then
+        local tmpdir="/tmp/.kube"
+
+        mkdir -pv "$tmpdir"
+
+        local default_kubeconfig="${HOME:-$(cd ~ && pwd)}/.kube/config"
+        local original_kubeconfig="${KUBECONFIG:-$default_kubeconfig}"
+
+        # reload safety - do not source from new tmpdir - not necessary for direnv but useful for local sourcing tests
+        #if [[ "$original_kubeconfig" =~ $tmpdir ]]; then
+        #    echo "ignoring \$KUBECONFIG=$original_kubeconfig, using default home location $default_kubeconfig"
+        #    original_kubeconfig="$default_kubeconfig"
+        #fi
+
+        # isolate the kubernetes context to avoid a race condition affecting any other shells or scripts
+        # epoch is added because $$ and $PPID are direnv sub-processes and may be reused later, so using epoch to add uniqueness
+        local epoch
+        epoch="$(date +%s)"
+        export KUBECONFIG="$tmpdir/config.${EUID:-${UID:-$(id -u)}}.$$.$epoch"
+
+        # load your real kube config to isolated staging area to source the context info
+        local src_kubeconfig=""
+        local kubeconfig_source_locations="
+            $original_kubeconfig
+            $default_kubeconfig
+            $PWD/.kube/config
+            /etc/rancher/k3s/k3s.yaml"
+        for kubeconfig in $kubeconfig_source_locations; do
+            if [ -f "$kubeconfig" ]; then
+                src_kubeconfig="$kubeconfig"
+                break
+            fi
+        done
+        if [ -n "$src_kubeconfig" ]; then
+            if [ "$src_kubeconfig" != "$KUBECONFIG" ]; then
+                cp -f -- "$src_kubeconfig" "$KUBECONFIG"
+            fi
+        else
+            if [[ "$PWD" =~ k8|kube ]]; then
+                echo "WARNING: failed to find one of:" >&2
+                echo "$kubeconfig_source_locations" | sort -u >&2
+                echo >&2
+            fi
+        fi
+
+        # race condition - 'kubectl config get-contexts' fails to find the context and switch in many runs without this sleep
+        context_found=0
+        local i
+        for ((i=0; i < 5; i++)); do
+            # surprisingly unreliable - if kubectl config get-contexts -o name | grep -Fxq "$context" can miss even after these succeed
+            #if [ -s "$KUBECONFIG" ]; then
+            #if cmp --quiet "$from_kubeconfig" "$KUBECONFIG"; then
+            if kubectl config get-contexts -o name | grep -Fxq "$context"; then
+                context_found=1
+                break
+            fi
+            sleep 0.1
+        done
+
+        # this randomly misses the context, and not even 'sync; sync; sleep 1' is reliable to stop that happening in testing
+        #if kubectl config get-contexts -o name 2>/dev/null | grep -Fxq "$context"; then
+        if [ "$context_found" = 1 ]; then
+            kubectl config use-context "$CONTEXT"
+
+            if [ -n "${namespace:-}" ]; then
+                kubectl config set-context "$context" --namespace "$namespace"
+            fi
+        fi
+    fi
+}
+
+gke_kube_context(){
+    local CONTEXT
+    for _ in CLOUDSDK_CORE_PROJECT CLOUDSDK_COMPUTE_REGION CLOUDSDK_CONTAINER_CLUSTER; do
+        if [ -z "${!_}" ]; then
+            echo "WARNING: \$$_ is not set" >&2
+        fi
+    done
+    # if CLOUDSDK_CONTAINER_CLUSTER and it's generated as a naming convention such as "${CLOUDSDK_CORE_PROJECT}-${CLOUDSDK_COMPUTE_REGION}"
+    #export CLOUDSDK_CONTAINER_CLUSTER="${CLOUDSDK_CONTAINER_CLUSTER:-${CLOUDSDK_CORE_PROJECT}-${CLOUDSDK_COMPUTE_REGION}}"
+
+    # the context naming convention for GKE clusters imported via:
+    #
+    #   gcloud container clusters get-credentials "$cluster" --zone "$zone"
+    #
+    # use gke_kube_creds.sh to auto-populate this for all GKE clusters in the current project
+    # and gcp_foreach_project.sh to do this for all GCP projects. Both scripts are found here:
+    #
+    #   https://github.com/HariSekhon/DevOps-Bash-tools
+    #
+    # should be using a regional cluster
+    CONTEXT="gke_${CLOUDSDK_CORE_PROJECT}_${CLOUDSDK_COMPUTE_REGION}_${CLOUDSDK_CONTAINER_CLUSTER}"
+    # not a zonal cluster
+    #CONTEXT="gke_${CLOUDSDK_CORE_PROJECT}_${CLOUDSDK_COMPUTE_ZONE}_${CLOUDSDK_CONTAINER_CLUSTER}"
+    kube_context "$CONTEXT" "${NAMESPACE:-}"
+}
+
+kube_context "$CONTEXT" "$NAMESPACE"
+
+#export ARGOCD_SERVER="argocd.mycompany.com"
+#export ARGOCD_OPTS="${ARGOCD_OPTS:-} --grpc-web"
+#if [ -n "${ARGOCD_AUTH_TOKEN_MYCOMPANY_OR_ENV:-}" ]; then
+#    export ARGOCD_AUTH_TOKEN="$ARGOCD_AUTH_TOKEN_MYCOMPANY_OR_ENV"
+#fi
+#export ARGOCD_APP="myapp"

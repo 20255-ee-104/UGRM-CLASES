@@ -1,0 +1,37 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2022-12-09 22:48:36 +0000 (Fri, 09 Dec 2022)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#          E x t e r n a l   S e c r e t s   K u s t o m i z a t i o n
+# ============================================================================ #
+
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../base
+  #- aws-secret-store.yaml
+  #- gcp-secret-store.yaml
+  #- external-secret.yaml
+  #- secret-store.yaml
+
+patches:
+  - path: serviceaccount.jsonpatch.yaml
+    target:
+      version: v1
+      kind: ServiceAccount
+      name: external-secrets

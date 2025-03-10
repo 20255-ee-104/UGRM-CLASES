@@ -1,0 +1,158 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2022-01-31 16:49:05 +0000 (Mon, 31 Jan 2022)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#
+#  https://github.com/HariSekhon/GitHub-Actions
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#      T r i v y   S c a n   D o c k e r   I a m g e   i n   A W S   E C R
+# ============================================================================ #
+
+---
+name: Trivy AWS ECR
+
+on:
+  workflow_call:
+    inputs:
+      repo:
+        description: The ECR repository, without the 'xxx.dkr.ecr.<region>.amazonaws.com' prefix
+        type: string
+        required: true
+      severity:
+        description: Set a severity to trigger CI workflow failure
+        type: string
+        default: HIGH,CRITICAL
+        required: false
+      no_sarif:
+        description: Disable GitHub Security tab integration to avoid spamming it with tonnes of OS CVEs in docker images
+        type: boolean
+        default: false
+        required: false
+      debug:
+        type: string
+        required: false
+        default: false
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      AWS_DEFAULT_REGION:
+        required: true
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: The ECR repository, without the 'xxx.dkr.ecr.<region>.amazonaws.com' prefix
+        type: string
+        required: true
+      severity:
+        description: Set a severity to trigger CI workflow failure
+        type: string
+        default: HIGH,CRITICAL
+        required: false
+      no_sarif:
+        description: Disable GitHub Security tab integration to avoid spamming it with tonnes of OS CVEs in docker images
+        type: boolean
+        default: false
+        required: false
+      debug:
+        type: boolean
+        required: false
+        default: false
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      AWS_DEFAULT_REGION:
+        required: true
+  schedule:
+    - cron: '0 0 * * 1'
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+
+defaults:
+  run:
+    shell: bash -euxo pipefail {0}
+
+env:
+  REPO: ${{ inputs.repo || github.events.inputs.repo }}
+  AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+  DEBUG: ${{ inputs.debug == true || github.event.inputs.debug == 'true' || '' }}
+
+jobs:
+  trivy:
+    name: Trivy AWS ECR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Environment
+        run: env | sort
+
+      - uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        id: configure-aws-credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
+
+      - name: Generate environment variable AWS_ACCOUNT_ID
+        run: |
+          #AWS_ACCOUNT_ID="$(aws sts get-caller-identity | jq -r .Account)"
+          #echo "AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID" >> "$GITHUB_ENV"
+          echo "AWS_ACCOUNT_ID=${{ steps.configure-aws-credentials.outputs.aws-account-id }}" >> "$GITHUB_ENV"
+      - name: Generate environment variable AWS_ECR_REGISTRY
+        run: echo "AWS_ECR_REGISTRY=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com" >> "$GITHUB_ENV"
+      - name: Generate environment variable DOCKER_IMAGE
+        run: echo "DOCKER_IMAGE=$AWS_ECR_REGISTRY/$REPO" >> "$GITHUB_ENV"
+
+      - name: Login to ECR
+        uses: docker/login-action@v1
+        with:
+          registry: ${{ env.AWS_ECR_REGISTRY }}
+          username: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          password: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Trivy (Full Informational)
+        run: |
+          # informational to see all issues
+          trivy image --no-progress "$TARGET"
+
+      - name: Run Trivy vulnerability scanner to generate sarif
+        if: ${{ ! ( inputs.no_sarif || github.event.inputs.sarif ) }}
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.DOCKER_IMAGE }}:${{ github.sha }}
+          format: template
+          template: '@/contrib/sarif.tpl'
+          output: trivy-results.sarif
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+
+      - name: Upload Trivy sarif scan results to GitHub Security tab
+        if: ${{ ! ( inputs.no_sarif || github.event.inputs.sarif ) }}
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: trivy-results.sarif
+
+      - name: Trivy (with Severity Error Out)
+        if: ${{ inputs.severity || github.event.inputs.severity }}
+        env:
+          SEVERITY: ${{ inputs.severity | github.event.inputs.severity }}
+        run: |
+          # fail the pipeline if any of the issues are in $SEVERITY eg. HIGH,CRITICAL
+          trivy image --no-progress --exit-code 1 --severity "$SEVERITY" "$TARGET"

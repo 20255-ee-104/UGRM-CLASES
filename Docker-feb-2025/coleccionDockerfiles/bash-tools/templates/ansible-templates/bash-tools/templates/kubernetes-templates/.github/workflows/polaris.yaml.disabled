@@ -1,0 +1,46 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2021-11-30 18:55:57 +0000 (Tue, 30 Nov 2021)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# Fails on JSON patches:
+#
+#   https://github.com/FairwindsOps/polaris/issues/667
+#
+#   and can't exclude files:
+#
+#     https://github.com/FairwindsOps/polaris/issues/670
+#
+#   the better solution is to run in Kubernetes, see polaris*.yaml at the top level of this repo
+
+---
+name: Polaris
+
+on:
+  #push:
+  #  branches:
+  #    - master
+  #    - main
+  #    - dev
+  #    - staging
+  #    - production
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * 1'
+
+jobs:
+  polaris:
+    name: Polaris
+    uses: HariSekhon/GitHub-Actions/.github/workflows/polaris.yaml@master
+    with:
+      debug: ${{ github.event.inputs.debug }}

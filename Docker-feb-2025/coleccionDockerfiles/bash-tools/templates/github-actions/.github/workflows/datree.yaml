@@ -1,0 +1,99 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2022-05-12 16:37:55 +0100 (Thu, 12 May 2022)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#
+#  https://github.com/HariSekhon/GitHub-Actions
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                                  D a t r e e
+# ============================================================================ #
+
+# https://github.com/datreeio/action-datree
+
+# Logs results to https://app.datree.io
+
+---
+name: Datree
+
+on:
+  workflow_call:
+    inputs:
+      path:
+        type: string
+        # recursive glob doesn't work:
+        #
+        #   https://github.com/datreeio/action-datree/issues/3
+        #   https://github.com/datreeio/datree/issues/618
+        #
+        # should be fixed now
+        default: '**/*.y*ml'
+        #default: '*.y*ml'
+        required: false
+      # https://hub.datree.io/setup/cli-arguments
+      cliArguments:
+        type: string
+        default: --only-k8s-files
+        required: false
+      isHelmChart:
+        #type: boolean
+        type: string
+        required: false
+      helmArguments:
+        # eg. '--values values.yaml'
+        type: string
+        required: false
+      isKustomization:
+        #type: boolean
+        type: string
+        required: false
+      kustomizeArguments:
+        type: string
+        required: false
+    secrets:
+      DATREE_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash -euxo pipefail {0}
+
+env:
+  DATREE_TOKEN: ${{ secrets.DATREE_TOKEN }}
+
+jobs:
+  k8sPolicyCheck:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Environment
+        run: env | sort
+
+      # because recursive glob will fail on Bash < 4 as per:
+      #
+      #   https://github.com/datreeio/datree/issues/618
+      #
+      - name: Bash version
+        run: bash --version
+
+      - name: Datree Policy Check
+        uses: datreeio/action-datree@main
+        with:
+          path: ${{ inputs.path }}
+          cliArguments: --output simple ${{ inputs.cliArguments }}
+          isHelmChart: ${{ inputs.isHelmChart == 'true' }}
+          helmArguments: ${{ inputs.helmArguments }}
+          isKustomization: ${{ inputs.isKustomization == 'true' }}
+          kustomizeArguments: ${{ inputs.kustomizeArguments }}

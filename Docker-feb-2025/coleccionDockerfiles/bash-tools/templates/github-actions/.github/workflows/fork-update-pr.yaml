@@ -1,0 +1,147 @@
+#
+#  Author: Hari Sekhon
+#  Date: Tue Feb 4 09:53:28 2020 +0000
+#
+#  vim:ts=2:sts=2:sw=2:et
+#
+#  https://github.com/HariSekhon/GitHub-Actions
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#          G i t H u b   F o r k   R e p o   U p d a t e   v i a   P R
+# ============================================================================ #
+
+# for improved traceability of updates
+
+---
+name: Fork Update PR
+
+on:
+  workflow_call:
+    secrets:
+      TOKEN:
+        description: Token with permissions 'repo' and 'read:org' to create and merge Pull Requests (uses default temporary repo token otherwise)
+        required: false
+    inputs:
+      branches-to-pr:
+        type: string
+        required: false
+        default: |
+          master
+          main
+          develop
+          dev
+          staging
+          production
+      branches-to-automerge:
+        type: string
+        required: false
+        default: |
+          master
+          main
+          develop
+          dev
+          staging
+      debug:
+        type: string
+        required: false
+        default: false
+  workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        required: false
+        default: false
+  schedule:
+    - cron: '0 10 * * 1'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+defaults:
+  run:
+    shell: bash -euxo pipefail {0}
+
+env:
+  #GITHUB_TOKEN: ${{ secrets.TOKEN || github.token }}
+  # GH_TOKEN has higher precedence than GITHUB_TOKEN
+  GH_TOKEN: ${{ secrets.TOKEN || github.token }}
+  GH_NO_UPDATE_NOTIFIER: 1
+  BRANCHES_TO_PR: ${{ inputs.branches-to-pr || github.event.inputs.branches-to-pr }}
+  BRANCHES_TO_AUTOMERGE: ${{ inputs.branches-to-automerge || github.event.inputs.branches-to-automerge }}
+  DEBUG: ${{ inputs.debug == true || github.event.inputs.debug == 'true' || '' }}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false  # killing this part way through may leave PRs without auto-merging
+
+jobs:
+  fork_update_pr:
+    name: Create Fork Update PRs
+    # github.event.repository.fork isn't available in scheduled workflows
+    if: |
+      github.repository_owner != 'HariSekhon' &&
+      (
+        github.event_name == 'schedule' ||
+        ( github.ref_type == 'branch' && github.ref_name == github.event.repository.default_branch )
+      )
+    # without 'contents: write' permission the PR merge fails with the error:
+    # Message: Resource not accessible by integration, Locations: [{Line:1 Column:58}]
+    runs-on: ubuntu-latest
+    container: harisekhon/bash-tools
+    steps:
+      - name: Environment
+        run: env | sort
+
+      # checkout is needed for gh command, otherwise the 'gh pr create' command gets this error::
+      #
+      #   [git remote -v]
+      #   fatal: not a git repository (or any parent up to mount point /)
+      #   Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).
+      #   /usr/bin/git: exit status 128
+      #
+      - uses: actions/checkout@v3
+
+      - name: GH CLI auth status
+        run: |
+          gh config set prompt disabled
+
+          #gh auth login --with-token <<< "${{github.token}}" # errors out if GITHUB_TOKEN is set and refused to write local credential because it wouldn't take effect on subsequent commands with GITHUB_TOKEN overriding it
+
+          # what you get by default
+          #GH_TOKEN="${{ github.token }}" gh auth status
+          # Logged in to github.com as github-actions[bot] (GH_TOKEN)
+
+          gh auth status
+          # if you use a PAT with the right permissions - full repo and org:read
+          # Logged in to github.com as myorg-ci-user (GH_TOKEN)
+
+          #gh api /user | jq  # implicit pipe collapses format, force through jq to avoid this
+
+      # default token
+      #
+      # gh: Resource not accessible by integration (HTTP 403)
+      # {"message":"Resource not accessible by integration","documentation_url":"https://docs.github.com/rest/reference/users#get-the-authenticated-user"}
+      #- name: GH API User
+      #  run: gh api /user
+
+      # because github.event.repository context is missing from scheduled workflows:
+      #
+      #   https://github.com/github/feedback/discussions/12269
+      #
+      - name: Generate environment variable IS_FORK
+        run: |
+          IS_FORK="$(gh api "/repos/$GITHUB_REPOSITORY" -q .fork)"
+          echo "IS_FORK=$IS_FORK" >> "$GITHUB_ENV"
+
+      - name: Create PRs & Automerge
+        if: github.event.repository.fork == true || env.IS_FORK == 'true'
+        run: |
+          git config --global --add safe.directory "$PWD"
+
+          github_repo_fork_update.sh "$GITHUB_REPOSITORY"

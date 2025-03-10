@@ -1,0 +1,84 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2022-02-18 18:29:44 +0000 (Fri, 18 Feb 2022)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#
+#  https://github.com/HariSekhon/GitHub-Actions
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                    G i t H u b   D u m p   C o n t e x t s
+# ============================================================================ #
+
+# Dumps all GitHub contexts for debugging - not recommended for public repositories in case sensitive information is dumped to public logs
+
+---
+name: Dump Contexts
+
+on:
+  workflow_call:
+    inputs:
+      debug:
+        type: string
+        required: false
+        default: false
+  # in calling workflow, you may want to do
+  #schedule:
+  #  # 1st of every month, see if anything has changed
+  #  - cron: '0 0 1 * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+env:
+  DEBUG: ${{ inputs.debug == true || github.event.inputs.debug == 'true' || '' }}
+
+jobs:
+  dump_contexts:
+    name: Dump Contexts
+    runs-on: ubuntu-latest
+    container: ubuntu:latest
+    timeout-minutes: 10
+    steps:
+
+      - name: Environment
+        run: env | sort
+
+      - name: Dump GitHub context
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+        run: echo "$GITHUB_CONTEXT"
+
+      - name: Dump job context
+        env:
+          JOB_CONTEXT: ${{ toJson(job) }}
+        run: echo "$JOB_CONTEXT"
+
+      - name: Dump steps context
+        env:
+          STEPS_CONTEXT: ${{ toJson(steps) }}
+        run: echo "$STEP_CONTEXT"
+
+      - name: Dump runner context
+        env:
+          RUNNER_CONTEXT: ${{ toJson(runner) }}
+        run: echo "$RUNNER_CONTEXT"
+
+      - name: Dump strategy context
+        env:
+          STRATEGY_CONTEXT: ${{ toJson(strategy) }}
+        run: echo "$STRATEGY_CONTEXT"
+
+      - name: Dump matrix context
+        env:
+          MATRIX_CONTEXT: ${{ toJson(matrix) }}
+        run: echo "$MATRIX_CONTEXT"

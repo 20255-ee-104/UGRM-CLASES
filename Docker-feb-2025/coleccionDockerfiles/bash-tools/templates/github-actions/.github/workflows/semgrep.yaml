@@ -1,0 +1,179 @@
+#
+#  Author: Hari Sekhon
+#  Date: Wed Jan 19 19:11:31 2022 +0000
+#
+#  vim:ts=2:sts=2:sw=2:et
+#
+#  https://github.com/HariSekhon/GitHub-Actions
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                        S e m g r e p   W o r k f l o w
+# ============================================================================ #
+
+# Generates code scanning alerts in GitHub's Security tab -> Code scanning alerts
+
+# https://semgrep.dev/docs/semgrep-ci/sample-ci-configs/#github-actions
+
+---
+name: Semgrep
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    ignore-paths:
+      - '**/README.md'
+  pull_request:
+    branches:
+      - master
+      - main
+    ignore-paths:
+      - '**/README.md'
+  workflow_call:
+    inputs:
+    #  # https://semgrep.dev/explore
+    #  # https://semgrep.dev/r  # full rule list
+    #  config:
+    #    type: string
+    #    required: false
+    #    default: |
+    #      p/r2c-ci
+    #      p/r2c-best-practices
+    #      p/docker-compose
+    #      p/dockerfile
+    #      p/kubernetes
+    #      p/nginx
+    #      p/terraform
+    #      p/python
+    #      p/golang
+    #     #p/kotlin
+    #     #p/insecure-transport
+    #     #p/jwt
+    #     #p/xss
+    #     #p/django
+    #     #p/scala
+    #     #p/ruby
+    #     #p/javascript
+    #     #p/flask
+    #     #p/react
+    #     #p/nodejsscan
+    #     #p/eslint-plugin-security
+    #     #p/phpcs-security-audit
+      debug:
+        type: string
+        required: false
+        default: false
+  workflow_dispatch:
+    inputs:
+      #config:
+      #  type: string
+      #  required: false
+      debug:
+        type: boolean
+        required: false
+        default: false
+  schedule:
+    - cron: '0 0 * * 1'
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+
+defaults:
+  run:
+    shell: bash -euxo pipefail {0}
+
+env:
+  DEBUG: ${{ inputs.debug == true || github.event.inputs.debug == 'true' || '' }}
+
+jobs:
+  semgrep:
+    name: Semgrep Scan, GitHub security report
+    runs-on: ubuntu-latest
+    container:
+      image: returntocorp/semgrep
+
+    # Skip any PR created by dependabot to avoid permission issues
+    if: github.actor != 'dependabot[bot]'
+    # github.event.repository.fork isn't available in scheduled workflows
+    # can't prevent forks of this repo, because also prevents caller workflows
+
+    steps:
+      - name: Environment
+        run: env | sort
+
+      # ubuntu-latest already has this installed and a newer version
+      #- name: Install Git
+      #  run: sudo apt-get update && sudo apt-get install -y git --no-install-recommends
+
+      - name: Git version
+        run: git --version
+
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive  # requires Git 2.18+ to be installed first
+
+      # XXX: workaround for: https://github.com/returntocorp/semgrep/issues/5316
+      - name: configure .semgrepignore
+        run: |
+          if ! [ -f .semgrepignore ]; then
+            wget -O .semgrepignore https://raw.githubusercontent.com/returntocorp/semgrep/develop/cli/src/semgrep/templates/.semgrepignore
+          fi
+          echo semgrep.sarif >> .semgrepignore
+
+      # Removed
+      #- uses: returntocorp/semgrep-action@v1
+      #  with:
+      #    config: >- # more at semgrep.dev/explore
+      #      ${{ inputs.config }}
+      #      ${{ github.event.inputs.config }}
+      #
+      #      p/security-audit
+      #      p/secrets
+      #      p/semgrep-misconfigurations
+      #      p/semgrep-rule-lints
+      #      p/github-actions
+      #      p/ci
+      #      p/owasp-top-ten
+      #      p/command-injection
+      #      p/sql-injection
+      #
+      #    # == Optional settings in the `with:` block
+      #
+      #    # Instead of `config:`, use rules set in Semgrep App.
+      #    # Get your token from semgrep.dev/manage/settings.
+      #    #   publishToken: ${{ secrets.SEMGREP_APP_TOKEN }}
+      #
+      #    # XXX: both of these are not obsolete cause breakage
+      #    #
+      #    # Never fail the build due to findings on pushes.
+      #    # Instead, just collect findings for semgrep.dev/manage/findings
+      #    #auditOn: push
+      #    #auditOn: push workflow_dispatch cron
+      #    generateSarif: "1"
+      #
+      #  # Change job timeout (default is 1800 seconds; set to 0 to disable)
+      #  #env:
+      #    #SEMGREP_AGENT_DEBUG: 1
+      #    #SEMGREP_TIMEOUT: 300
+
+      - run: semgrep ci --config auto --sarif > semgrep.sarif
+        env:
+          # Connect to Semgrep Cloud Platform through your SEMGREP_APP_TOKEN.
+          # Generate a token from Semgrep Cloud Platform > Settings
+          # and add it to your GitHub secrets.
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
+      # Upload findings to GitHub Advanced Security Dashboard [step 2/2]
+      - name: Upload SARIF file for GitHub Advanced Security Dashboard
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: semgrep.sarif
+        if: always()

@@ -1,0 +1,69 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2022-02-11 15:50:21 +0000 (Fri, 11 Feb 2022)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#
+#  https://github.com/HariSekhon/GitHub-Actions
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                           T e r r a f o r m   F m t
+# ============================================================================ #
+
+# Lints Tarrbcorm code (see adjacent terraform-fmt-write.yaml to auto-fix the code)
+
+---
+name: Terraform Fmt
+
+on:
+  workflow_call:
+    inputs:
+      debug:
+        type: string
+        required: false
+        default: false
+  workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        required: false
+        default: false
+  #schedule:
+  #  - cron: '0 0 * * 1'
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    # hashicorp/terraform doesn't have bash
+    #shell: bash -euxo pipefail {0}
+    shell: sh -eux {0}
+
+env:
+  DEBUG: ${{ inputs.debug == true || github.event.inputs.debug == 'true' || '' }}
+
+jobs:
+  format:
+    name: Terraform Fmt
+    runs-on: ubuntu-latest
+    container: hashicorp/terraform:latest
+    steps:
+      - name: Environment
+        run: env | sort
+
+      # hashicorp/terraform does have git
+      - name: Git version
+        run: git --version
+
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive  # requires Git 2.18+ to be installed first
+
+      - name: Terraform Fmt
+        run: terraform fmt -diff -check -recursive

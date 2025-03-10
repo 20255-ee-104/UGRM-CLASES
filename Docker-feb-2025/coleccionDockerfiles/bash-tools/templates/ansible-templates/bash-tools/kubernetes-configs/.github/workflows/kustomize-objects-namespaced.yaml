@@ -1,0 +1,137 @@
+#  vim:ts=2:sts=2:sw=2:et
+#
+#  Author: Hari Sekhon
+#  Date: 2022-08-13 09:54:19 +0100 (Sat, 13 Aug 2022)
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+---
+name: Kustomize Objects Namespaced
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '*.yaml'
+      - .github/workflows/kustomize-objects-namespaced.yaml
+      #- .github/actions/install-kustomize/action.yaml
+      #- .github/actions/kustomizations-install/action.yaml
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '*.yaml'
+      - .github/workflows/kustomize-objects-namespaced.yaml
+      #- .github/actions/install-kustomize/action.yaml
+      #- .github/actions/kustomizations-install/action.yaml
+  workflow_dispatch:  # needs to be in default branch before you get the UI option to manually run though
+    inputs:
+      debug:
+        type: boolean
+        required: false
+        default: false
+  schedule:
+    - cron: '0 0 * * 1'
+
+env:
+  # XXX: https://github.com/wiremind/wiremind-helm-charts/issues/259
+  IGNORE_REGEX: clair/|traefik-hub-agent/|rancher/
+  DEBUG: ${{ github.event.inputs.debug == true || '' }}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash -euxo pipefail {0}
+
+jobs:
+  kustomize-check-objects-namespaced:
+    name: Kustomize Check Objects Namespaced
+    runs-on: ubuntu-latest
+    steps:
+      - name: Environment
+        run: env | sort
+
+      - uses: actions/checkout@v3
+
+      - uses: actions/checkout@v3
+        with:
+          repository: HariSekhon/DevOps-Bash-tools
+          ref: master
+          submodules: 'true'  # requires Git 2.18+ to be installed first
+          path: bash-tools
+
+      - name: Install Helm
+        run: bash-tools/install/install_helm.sh
+
+      - name: Helm version
+        run: helm version
+
+      - name: Install yq
+        run: bash-tools/install/install_yq.sh
+
+      - name: yq version
+        run: yq --version
+
+      #- uses: ./.github/actions/install-kustomize
+
+      #- name: Install Kind
+      #  run: wget -O /usr/local/bin/kind https://github.com/kubernetes-sigs/kind/releases/latest/download/kind-linux-amd64
+
+      #- name: Kind Version
+      #  run: kind version
+      #- name: Generate $KUBE_CONFIG
+      #  run: |
+      #    KUBECONFIG="$(kind get kubeconfig-path)"
+      #    echo "KUBECONFIG=$KUBECONFIG" >> "$GITHUB_ENV"
+
+      - name: Create k8s Kind Cluster
+        uses: helm/kind-action@v1.3.0
+
+      - name: Cluster Info
+        run: kubectl cluster-info
+
+      #- name: Installing all kustomizations to query Kubernetes API to exclude objects at cluster scope
+      #  uses: ./.github/actions/kustomizations-install
+
+      - name: 'Install Helm Charts found in all */base/kustomization.y*ml files to query Kubernetes API to exclude objects at cluster scope'
+        run: |
+          # XXX: https://github.com/wiremind/wiremind-helm-charts/issues/259
+          kustomizations="$(find . -type f -path '*/*/kustomization.y*ml' | grep -v "$IGNORE_REGEX")"
+          # try twice in case of timeouts
+          export SKIP_EXISTING_HELM_INSTALLATIONS=1
+          export SKIP_ERRORS=1
+          bash-tools/kubernetes/kustomize_install_helm_charts.sh $kustomizations ||
+          bash-tools/kubernetes/kustomize_install_helm_charts.sh $kustomizations
+
+
+      - name: Check Objects are Explicitly Namespaced
+        run: |
+          if [ -n "${DEBUG:-}" ]; then
+            set -x
+          fi
+          bash_tools="$PWD/bash-tools"
+          for kustomization in */*/kustomization.y*ml; do
+            if [[ "$kustomization" =~ ^($IGNORE_REGEX) ]]; then
+              echo "Skipping $kustomization"
+              echo
+              continue
+            fi
+            pushd "$(dirname "$kustomization")"
+            "$bash_tools"/kubernetes/kustomize_check_objects_namespaced.sh
+            popd
+            echo
+          done

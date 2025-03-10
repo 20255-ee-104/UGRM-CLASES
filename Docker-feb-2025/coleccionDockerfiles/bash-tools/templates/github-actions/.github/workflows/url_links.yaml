@@ -1,0 +1,110 @@
+#
+#  Author: Hari Sekhon
+#  Date: Tue Jan 18 23:31:42 2022 +0000
+#
+#  vim:ts=2:sts=2:sw=2:et
+#
+#  https://github.com/HariSekhon/GitHub-Actions
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                               U R L   L i n k s
+# ============================================================================ #
+
+---
+name: URL Links
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+    branches:
+      - master
+      - main
+  workflow_call:
+    inputs:
+      url_links_ignored:
+        type: string
+        required: false
+      ignore_urls_without_dots:
+        type: string
+        required: false
+    #  env:
+    #    type: string  # pass in string in export shell format eg. export MYVAR=myvalue MYVAR2=myvalue2
+    #    required: false
+      submodules:
+        type: string
+        required: false
+        default: false
+      debug:
+        type: string
+        required: false
+        default: false
+  schedule:
+    - cron: '0 0 * * 1'
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash -euxo pipefail {0}
+
+env:
+  DEBUG: ${{ inputs.debug == true || github.event.inputs.debug == 'true' || '' }}
+
+jobs:
+  check_url_links:
+    name: Check URL Links
+    # github.event.repository.fork isn't available in scheduled workflows
+    # can't prevent forks of this repo, because also prevents caller workflows
+    #if: github.repository == 'HariSekhon/Github-Actions'
+    runs-on: ubuntu-latest
+    container: harisekhon/bash-tools
+    steps:
+      - name: Environment
+        run: env | sort
+
+      - name: Git version
+        run: git --version
+
+      - uses: actions/checkout@v3
+        with:
+          submodules: ${{ inputs.submodules }}  # 'recursive' default requires Git 2.18+ to be installed first
+
+      #- uses: actions/checkout@v3
+      #  with:
+      #    repository: HariSekhon/DevOps-Bash-tools
+      #    #ref: master            # unset for default branch in case it changes in future
+      #    #submodules: recursive  # don't need the submodules for just this script, save time
+      #    path: bash-tools
+
+      - name: Check URL Links
+        env:
+          #DEBUG: 1
+          VERBOSE: 1
+          URL_LINKS_IGNORED: ${{ inputs.url_links_ignored }}
+          IGNORE_URLS_WITHOUT_DOTS: ${{ inputs.ignore_urls_without_dots }}
+        run: |
+          # extended PATH gives option of using bash tools checkout or version from container
+          export PATH="$PWD/bash-tools:$PATH"
+
+          git config --global --add safe.directory "$PWD"
+
+          # this is just to account for the examples in the .github/workflows/README.md in this own repo
+          if [ -z "$URL_LINKS_IGNORED" ]; then
+            export URL_LINKS_IGNORED="
+              https://semgrep.dev
+              http://krb5server
+              https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv
+              https://megalinter.github.io
+            "
+          fi
+
+          check_url_links.sh

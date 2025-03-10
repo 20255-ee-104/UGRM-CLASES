@@ -1,0 +1,57 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2019-10-10 17:42:54 +0100 (Thu, 10 Oct 2019)
+#
+#  https://github.com/HariSekhon/DevOps-Bash-tools
+#
+#  License: see accompanying LICENSE file
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                         C I   C o n f i g   F i l e s
+# ============================================================================ #
+
+# Files to sync to adjacent repos, one per line
+
+Jenkinsfile
+.appveyor.yml
+.buildkite/pipeline.yml
+.circleci/config.yml
+.cirrus.yml
+.drone.yml
+.gitlab-ci.yml
+.mdlrc
+.mdl.rb
+.pre-commit-config.yaml
+.pylintrc
+#.scrutinizer.yml
+.semaphore/semaphore.yml
+#.travis.yml
+azure-pipelines.yml
+bitbucket-pipelines.yml
+buddy.yml
+
+cicd/.concourse.yml
+cicd/.gocd.yml
+cicd/buildspec.yml
+cicd/cloudbuild.yaml
+
+codefresh.yml
+kics.config
+sonar-project.properties
+
+setup/gocd_config_repo.json
+setup/jenkins-job.xml
+setup/ci_bootstrap.sh
+
+teamcity/.teamcity.vcs.json
+teamcity/.teamcity.vcs.oauth.json
+teamcity/.teamcity.vcs.ssh.json
+
+# defunct
+#codeship/codeship.yml
+#shippable/shippable.yml
+#wercker/wercker.yml
+#wercker/.werckerignore

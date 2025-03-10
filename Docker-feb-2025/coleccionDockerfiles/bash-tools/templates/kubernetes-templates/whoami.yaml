@@ -1,0 +1,318 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2023-04-12 23:19:30 +0100 (Wed, 12 Apr 2023)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                    W h o A m I   T e s t i n g   S t a c k
+# ============================================================================ #
+
+# For testing Traefik Ingress Controller
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: whoami
+  labels:
+    goldilocks.fairwinds.com/enabled: "true"
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: whoami
+  namespace: whoami
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+    ingress.kubernetes.io/force-ssl-redirect: "true"
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+    traefik.ingress.kubernetes.io/router.middlewares: default-redirectscheme@kubernetescrd
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+spec:
+  ingressClassName: traefik
+  tls:
+    # XXX: Edit
+    - hosts:
+        - whoami.DOMAIN.COM
+      # SSL cert auto-generated for this FQDN by Cert Manager ACME integration (see cert-manager.yaml) and saved to this secret name
+      secretName: whoami-tls
+  rules:
+    # XXX: Edit
+    - host: whoami.DOMAIN.COM
+      http:
+        paths:
+          # XXX: Edit
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: whoami
+                port:
+                  number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: whoami2
+  namespace: whoami
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+    ingress.kubernetes.io/force-ssl-redirect: "true"
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+    traefik.ingress.kubernetes.io/router.middlewares: default-redirectscheme@kubernetescrd
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+spec:
+  ingressClassName: traefik
+  tls:
+    # XXX: Edit
+    - hosts:
+        - whoami2.DOMAIN.COM
+      # SSL cert auto-generated for this FQDN by Cert Manager ACME integration (see cert-manager.yaml) and saved to this secret name
+      secretName: whoami2-tls
+  rules:
+    # XXX: Edit
+    - host: whoami2.DOMAIN.COM
+      http:
+        paths:
+          # XXX: Edit
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: whoami2
+                port:
+                  number: 80
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: whoamiv1
+  namespace: whoami
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      # XXX: Edit
+      match: Host(`whoami.DOMAIN.COM`)
+      services:
+        - kind: Service
+          name: whoamiv1
+          namespace: whoami
+          port: 80
+      middlewares:
+        - name: default-redirectscheme@kubernetescrd
+  tls:
+    certResolver: letsencrypt
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: whoamiv2
+  namespace: whoami
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      # XXX: Edit
+      match: Host(`whoami2.DOMAIN.COM`)
+      services:
+        - kind: Service
+          name: whoamiv2
+          namespace: whoami
+          port: 80
+  tls:
+    certResolver: letsencrypt
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: whoami-weighted-round-robin
+  namespace: whoami
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+    # XXX: Edit
+      match: Host(`whoami-wrr.DOMAIN.COM`)
+      services:
+        - kind: TraefikService
+          name: weighted-whoami
+          namespace: app
+  tls:
+    certResolver: letsencrypt
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: whoami-wrr-header
+  namespace: whoami
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      # XXX: Edit
+      match: Host(`whoami2.DOMAIN.COM`) && HeadersRegexp(`X-Canary-Header`, `knock-knock`)
+      services:
+        - kind: Service
+          name: whoamiv2
+          namespace: whoami
+          port: 80
+      middlewares:
+        - name: canary@kubernetescrd
+  tls:
+    certResolver: letsencrypt
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: whoamiv1
+  namespace: whoami
+spec:
+  ports:
+    - name: http
+      port: 80
+  selector:
+    app: whoamiv1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: whoamiv2
+  namespace: whoami
+spec:
+  ports:
+    - name: http
+      port: 80
+  selector:
+    app: whoamiv2
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: TraefikService
+metadata:
+  name: weighted-whoami
+  namespace: whoami
+spec:
+  weighted:
+    services:
+      - name: whoamiv1
+        port: 80
+        namespace: whoami
+        weight: 5
+
+      - name: whoamiv2
+        port: 80
+        weight: 1
+        namespace: whoami
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: canary
+  namespace: whoami
+spec:
+  headers:
+    customRequestHeaders:
+      X-Canary-Header: "knock-knock"
+    customResponseHeaders:
+      X-Canary-Response-Header: "hello there"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: whoamiv1
+  namespace: whoami
+  labels:
+    name: whoamiv1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: whoamiv1
+  template:
+    metadata:
+      labels:
+        app: whoamiv1
+    spec:
+      containers:
+        - name: whoamiv1
+          image: traefik/whoami:latest
+          args:
+            - -name=FOO-v1
+            - -verbose
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 80
+            failureThreshold: 1
+            initialDelaySeconds: 2
+            periodSeconds: 3
+            successThreshold: 1
+            timeoutSeconds: 2
+          resources:
+            requests:
+              cpu: 50m
+              memory: 20Mi
+            limits:
+              cpu: 100m
+              memory: 100Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: whoamiv2
+  namespace: whoami
+  labels:
+    name: whoamiv2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: whoamiv2
+  template:
+    metadata:
+      labels:
+        app: whoamiv2
+    spec:
+      containers:
+        - name: whoamiv2
+          image: traefik/whoami:latest
+          args:
+            - -name=BAR-v2
+            - -verbose
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 80
+            failureThreshold: 1
+            initialDelaySeconds: 2
+            periodSeconds: 3
+            successThreshold: 1
+            timeoutSeconds: 2
+          resources:
+            requests:
+              cpu: 50m
+              memory: 20Mi
+            limits:
+              cpu: 100m
+              memory: 100Mi
