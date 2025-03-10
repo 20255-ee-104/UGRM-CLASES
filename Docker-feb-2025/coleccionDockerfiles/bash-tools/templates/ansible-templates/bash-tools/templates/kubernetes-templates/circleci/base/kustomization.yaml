@@ -1,0 +1,40 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2021-12-13 23:47:23 +0000 (Mon, 13 Dec 2021)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#           C i r c l e C I   R u n n e r   K u s t o m i z a t i o n
+# ============================================================================ #
+
+# As of Dec 2021:
+#
+# - CircleCI's Helm chart wasn't published anywhere, was only 0.0.1 and only in git repo, no charts repo url so couldn't use in Kustomize, also lacked functionality and optimizations added here, such as no eviction and avoiding preemption
+# - CircleCI doesn't support auto-scaling, only explicit always running replicas, so have used and tested an HPA with a termination grade period greater than configured runner max run time
+
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: circleci
+
+resources:
+  - namespace.yaml
+  - circleci-runner-serviceaccount.yaml
+  - circleci-runner-configmap.yaml
+  - circleci-runner-deployment.yaml
+  - circleci-runner-hpa.yaml
+
+# done in namespace yaml now
+#patchesStrategicMerge:
+#  - goldilocks-namespace-enable.patch.yaml

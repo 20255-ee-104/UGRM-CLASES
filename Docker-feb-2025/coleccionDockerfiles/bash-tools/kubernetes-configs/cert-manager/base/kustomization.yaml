@@ -1,0 +1,56 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2022-01-05 18:48:41 +0000 (Wed, 05 Jan 2022)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#              C e r t   M a n a g e r   K u s t o m i z a t i o n
+# ============================================================================ #
+
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+#namespace: cert-manager  # XXX: Do not set this - it will override roles for kube-system needed for leader election of cainjector
+
+resources:
+  # https://github.com/jetstack/cert-manager/releases
+  #
+  # contains namespace
+  #- https://github.com/jetstack/cert-manager/releases/download/v1.6.1/cert-manager.yaml
+  #
+  # OR helm + namespace.yaml
+  #
+  - namespace.yaml
+  #- clusterissuer.yaml  # XXX: configure this before enabling
+
+helmCharts:
+  - name: cert-manager
+    repo: https://charts.jetstack.io
+    version: v1.14.2  # helm search repo --regexp 'jetstack/cert-manager[[:space:]]' -o json | jq -r '.[].version'
+    releaseName: cert-manager
+    namespace: cert-manager
+    includeCRDs: true
+    valuesFile: values.yaml
+
+# label app.kubernetes.io/instance=cert-manager causes warnings for all 6 Cert Manager CRDs in ArgoCD, eg:
+#
+#  SharedResourceWarning 	CustomResourceDefinition/certificaterequests.cert-manager.io is part of applications cert-manager-production and cert-manager
+#
+#   https://github.com/argoproj/argo-cd/issues/6728
+#
+patches:
+  - path: ./remove-instance-label.jsonpatch.yaml
+    target:
+      kind: CustomResourceDefinition
+      labelSelector: app.kubernetes.io/instance=cert-manager

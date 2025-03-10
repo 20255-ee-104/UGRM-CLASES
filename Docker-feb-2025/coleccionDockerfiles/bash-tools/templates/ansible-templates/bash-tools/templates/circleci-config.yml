@@ -1,0 +1,677 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2020-02-23 23:30:14 +0000 (Sun, 23 Feb 2020)
+#  Original: H1 2016 (Circle CI 1.x)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#
+#  https://github.com/HariSekhon/Templates
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# https://circleci.com/docs/2.0/configuration-reference
+
+# place at .circleci/config.yml at the top for your git repo
+
+---
+version: 2.1
+
+# ============================================================================ #
+#                                    O r b s
+# ============================================================================ #
+
+# XXX: consider avoiding Orbs for reuse CLI commands that port between CI/CD systems
+orbs:
+  # @orb_version, not tool version
+  #
+  # AWS CLI is already available on machine VM executor - only use this on Docker executor
+  aws-cli: circleci/aws-cli@2.0.6  # https://circleci.com/developer/orbs/orb/circleci/aws-cli - gives install/setup/some CLI wrapper commands
+
+  aws-ecr: circleci/aws-ecr@7.3.0  # https://circleci.com/developer/orbs/orb/circleci/aws-ecr
+  #
+  # or use more portable check_bash_syntax.sh in https://github.com/HariSekhon/DevOps-Bash-tools
+  # https://circleci.com/developer/orbs/orb/circleci/shellcheck
+  shellcheck: circleci/shellcheck@2.0.0
+#  # The python orb contains a set of prepackaged CircleCI configuration you can use repeatedly in your configuration files
+#  # https://circleci.com/developer/orbs/orb/circleci/python
+#  python: circleci/python@1.2
+
+
+# ============================================================================ #
+#                     P i p e l i n e   P a r a m e t e r s
+# ============================================================================ #
+
+# pipeline-level parameters can be set in the CircleCI UI to enable/disable some workflows or steps in a job within a workflow
+
+parameters:
+  mybuild:
+    type: boolean
+    default: false
+  region:
+    type: string
+    default: eu-west-2
+  terraform_version:
+    type: string
+    default: 1.1.2
+
+
+# ============================================================================ #
+#                               W o r k f l o w s
+# ============================================================================ #
+
+# Workflows - defines jobs run order and triggers
+#
+#   https://circleci.com/docs/2.0/workflows/
+#
+workflows:
+  version: 2
+  myworkflow:  # XXX: Edit section
+    #triggers:  # without this runs on every push
+    jobs:
+      - shellcheck/check #:
+          #dir: ./my-scripts
+          #exclude: SC2148
+      # concurrent by default unless has 'requires' dependency
+      - mybuild1:
+          context: mycontext  # inherit all the env vars set at the context level
+          requires:
+            - shellcheck/check
+          filters:
+            branches:
+              only:
+                - main
+                - master
+                - dev
+                - staging
+                - production
+      # mybuild2 + build3 will run concurrently
+      #- mybuild2:
+      #    context: mycontext
+      #    requires:
+      #     - mybuild1  # start only after mybuild1 completes successfully
+      #- mybuild3:
+      #    context: mycontext
+      #    requires:
+      #     - mybuild1  # start only after mybuild1 completes successfully
+      #    # expands to 9 jobs that runs all 3 versions on all 3 platforms
+      #    matrix:
+      #      parameters:
+      #        version: ["0.1", "0.2", "0.3"]
+      #        platform: ["macos", "windows", "linux"]
+      - human_gate:
+          type: approval
+          requires:
+            - mybuild1
+      #- mydeploy:
+      #    context: mycontext
+      #    requires:
+      #      - human_gate
+      #    filters:  # AND'd
+      #      branches:  # requires entire branch to match
+      #        only:  # only branches matching the below regex filters will run
+      #          - dev
+      #          - /pre-prod(?:-.+)?$/
+      #        ignore: /pr-.*/
+      #      tags:
+      #        only: /^v.*/
+  #nightly:
+  #  jobs:
+  #    - mybuild1
+  #  triggers:
+  #    - schedule:
+  #        cron: "0 0 * * *"  # step format (*/2) and range format (1-5) are not supported as of 2.1
+  #        filters:
+  #          #tags:
+  #          #  only:
+  #          #    -
+  #          #  ignore:
+  #          #    -
+  #          branches:
+  #            only:
+  #              - main
+  #              - master
+  #            #ignore:
+  #            #  - dev
+  #            #  - staging
+  #matrix-tests:
+  #  jobs:
+  #    - node_versions:
+  #        matrix:
+  #          parameters:
+  #            version:
+  #              - 13.11.0
+  #              - 12.16.0
+  #              - 10.19.0
+  #
+  # https://circleci.com/developer/orbs/orb/circleci/aws-ecr
+  build_and_push_image:
+    jobs:
+      - aws-ecr/build-and-push-image:
+          account-url: AWS_ECR_ACCOUNT_URL  # env vars in project/context - should contain ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com
+          aws-access-key-id: AWS_ACCESS_KEY_ID
+          aws-secret-access-key: AWS_SECRET_ACCESS_KEY
+          context: myContext
+          create-repo: true
+          dockerfile: Dockerfile
+          no-output-timeout: 10m
+          path: .
+          profile-name: default
+          region: AWS_DEFAULT_REGION
+          repo: myECRRepository  # XXX: set this
+          skip-when-tags-exist: false
+          tag: "latest,$CIRCLE_BRANCH,$CIRCLE_SHA1,$CIRCLE_TAG"
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^v\d+\.\d+\.\d+$/
+  #
+  terraform:
+    jobs:
+      - terraform-plan
+      - terraform-approve:
+          type: approval
+          requires:
+            - terraform-plan
+      - terraform-apply:
+          requires:
+            - terraform-approve
+      #- terraform-plan-destroy:
+      #    requires:
+      #      - terraform-apply
+      #- terraform-approve-destroy:
+      #    type: approval
+      #    requires:
+      #      - terraform-plan-destroy
+      #- terraform-destroy:
+      #    requires:
+      #      - terraform-approve-destroy
+  #
+  # use parameterized Commands to Terragrunt plan & apply various modules
+  terragrunt:
+    jobs:
+      - terragrunt-plan:
+          context: mycontext
+          name: terragrunt-plan-mymodule-dev
+          env: dev
+          region: << pipeline.parameters.region >>
+          module: vpc
+      - terragrunt-approve-mymodule-dev:
+          type: approval
+          requires:
+            - terragrunt-plan-mymodule-dev
+      - terragrunt-apply:
+          context: mycontext
+          name: terragrunt-apply-mymodule-dev
+          env: dev
+          region: << pipeline.parameters.region >>
+          module: vpc
+          requires:
+            - terragrunt-approve-mymodule-dev
+
+
+# ============================================================================ #
+#                                    J o b s
+# ============================================================================ #
+
+jobs:
+  mybuild1:
+    parameters:
+      myparam:
+        type: string  # string, boolean, integer, enum
+        default: myvalue
+      os:
+        default: "linux"
+        description: The target Operating System for the heroku binary. Must be one of "linux", "darwin", "win32".
+        type: enum
+        enum: ["linux", "darwin", "win32"]
+      myenvvar:
+        type: env_var_name  # checks value will be a valid environment variable
+        default: AWS_ACCESS_KEY
+    executor: my-executor  # reuse executor definition instead of defining machine/docker/macos/resource_class repeatedly for each job
+    circleci_ip_ranges: true  # use the well known IPs - requires paid plan - see circleci_ip_ranges.sh in DevOps Bash tools to retrieve current list for firewall rules etc.
+    environment:  # job-wide env vars
+      AWS_ACCOUNT_ID: "123456789012"  # store digits over 6 chars as a string to prevent numeric exponential conversion
+      TERRAFORM_IN_AUTOMATION: 1      # simplifies output slightly, avoids further CLI suggestions
+
+    # Instance Class resource sizing is different between Machine VM and Docker (machine is just under double the RAM)
+    #
+    #   https://circleci.com/docs/2.0/executor-types/#using-machine
+    #   https://circleci.com/docs/2.0/executor-types/#available-docker-resource-classes
+    #   https://circleci.com/docs/2.0/configuration-reference/#resourceclass
+    #
+    resource_class: medium  # set to 'small' for Terraform/Terragrunt jobs. Default: large. XXX: Edit to balance performance/cost or resources required for build/tests to execute successfully
+
+    # XXX: Choose to run job on a VM (machine) or docker container (docker container boots faster and uses less resources/credits)
+
+    # Self-hosted runners
+    #
+    # XXX: must not have a machine: or docker: section in this case, will use whatever the launch-agent container image is as the executor
+    #
+    #machine: true
+    #resource_class: <namespace>/<resource>
+    #resource_class: harisekhon/docker-runner  # XXX: for self-hosted runners on Docker or Kubernetes
+    #resource_class: harisekhon/k8s-runner
+
+    #macos: # VM with Xcode version 11.3
+    # xcode: 11.3.0
+
+    # VM - technically a docker image is a better choice than machine due to faster spin-up and less resources (credits/cost)
+    #    - use if you need:
+    #      - larger RAM (can go to roughly double)
+    #      - full OS access (network stack, sysctl etc)
+    #      - docker-compose mounts
+    #      - some native environment variation between build systems in order to test the repo's build automation is robust
+    #      - more pre-installed software for convenience:
+    #
+    #           https://circleci.com/docs/2.0/docker-to-machine/#pre-installed-software
+    #
+    #machine:
+    #  #
+    #  #   https://circleci.com/docs/2.0/configuration-reference/#available-machine-images
+    #  #
+    #  # default image gives old Docker 17 which fails to build with error:
+    #  #
+    #  #   Step 1/12 : FROM --platform=linux/amd64 amazonlinux:latest
+    #  #   Unknown flag: platform
+    #  #
+    #  #image: default  # old
+    #  #image: ubuntu-2004:202010-01  # (recommended) Ubuntu 20.04 VM with Docker 19.03.13 and docker-compose 1.27.4
+    #  image: ubuntu-2004:202111-01   # Ubuntu 20.04 VM, Docker v20.10.11, Docker Compose v1.29.2
+    #  # set to an actual docker image when running locally using circle_ci_job.sh
+    #  # docker image must have git installed to do the checkout, hence why using harisekhon/ubuntu-dev instead of base ubuntu image
+    #  #image: harisekhon/dev:ubuntu
+    #  # XXX: don't use Docker Layer Caching - CircleCI charges 200 credits per job for it, costing 20 minutes of build time charges to save 3-5 minutes of actual Docker building in-job. OMG.
+    #  #docker_layer_caching: true  # default: false - retains docker image layers cache for 3 days to speed up builds - available on performance and custom plans only - ignored on free plan with a notice
+    #  #
+    #  # set to an actual docker image when running locally using circle_ci_job.sh
+    #  # docker image must have git installed to do the checkout
+    #  # so using harisekhon/dev:ubuntu instead of base ubuntu image
+    #  #image: harisekhon/dev:ubuntu
+
+    # XXX: OR
+    #
+    # CircleCI Docker Images:
+    #
+    #   https://circleci.com/developer/images
+    #
+    #   https://hub.docker.com/u/cimg
+    #
+    docker:  # first container listed is where step commands run - usually you want a language image here
+      #- image: buildpack-deps:trusty  # legacy, replaced by next-gen cimg/base
+      - image: cimg/base:2021.04  # base ubuntu image, small but should already be cached on host so quick to start - see https://circleci.com/docs/2.0/circleci-images/#circleci-base-image
+      #- image: cimg/python:3.8
+      #- image: $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/myrepo:latest
+        environment:  # environment only for this docker container - base64 encode value if multiline
+          AWS_DEFAULT_REGION: eu-west-2  # CircleCI jobs runs in us-east-1, so this may not be efficient to push/pull docker images
+        auth:
+          username: harisekhon
+          password: $DOCKERHUB_PASSWORD  # context / project UI env-var reference
+        # to access private ECR images, either have the standard AWS environment variables available via context/project env vars or specific explicitly like so:
+        aws_auth:
+          # loaded from context or project env vars - see circleci_project_set_env_vars.sh for easy loading for an exported AWS credential CSV in the adjacent DevOps Bash tools repo:
+          #
+          #   https://github.com/HariSekhon/DevOps-Bash-tools
+          #
+          aws_access_key_id: $AWS_ACCESS_KEY_ID  # specify explicitly like this if different jobs use different env vars eg. $AWS_ACCESS_KEY_ID_STAGING vs $AWS_ACCESS_KEY_ID_PRODUCTION
+          aws_secret_access_key: $AWS_SECRET_ACCESS_KEY
+      - image: postgres:9.4.1
+        auth:
+          username: harisekhon
+          password: $DOCKERHUB_PASSWORD  # context / project UI env-var reference
+        #
+        # for the secondary or service container run in a common
+        # network where ports exposed on the primary container are
+        # available on localhost.
+        environment: # Specifies the POSTGRES_USER authentication
+         # environment variable, see circleci.com/docs/2.0/env-vars/
+         # for instructions about using environment variables.
+          POSTGRES_USER: root
+
+    # if running on Alpine, do this to source environment
+    #shell: /bin/sh -leo pipefail
+    #environment:
+    #  - BASH_ENV: /etc/profile
+
+    # speed up builds by using ram instead of disk if thre is enough ram
+    #working_directory: /mnt/ramdisk  # Docker
+    #working_directory: /dev/shm      # VM
+
+    steps:
+      # wrap all steps to make the job essentially optionally triggered at runtime via a pipeline parameter in the UI or API
+      #- run:
+      #    name: dummy # because CircleCI can't interpolate to no steps when 'when' condition is false
+      #    command: ":"
+      #- when:
+      #  condition: << pipeline.parameters.mybuild >>
+      #  steps:
+      #    - checkout
+      #    - ...
+      - checkout
+      #
+      # XXX: if primary executor is Docker
+      - setup_remote_docker:
+          version: 20.10.11  # https://circleci.com/docs/2.0/building-docker-images/#docker-version
+          # XXX: don't use Docker Layer Caching - CircleCI charges 200 credits per job for it, costing 20 minutes of build time charges to save 3-5 minutes of actual Docker building in-job. OMG.
+          #docker_layer_caching: false  # available on performance and custom plans only - ignored on free plan with a notice
+      #
+      # Install AWS CLI using orb
+      #
+      - aws-cli/install:
+          version: 2.4.6  # AWS CLI versions: https://github.com/aws/aws-cli/blob/v2/CHANGELOG.rst
+      #
+      - run:
+          name: Setup Environment Variables    # BASH_ENV gets sourced automatically by subsequent bash shells across run steps
+          command: |
+            echo 'export PATH=$GOPATH/bin:$PATH' >> "$BASH_ENV"
+            echo 'export GIT_SHA1=$CIRCLE_SHA1' >> "$BASH_ENV"
+            echo 'export GIT_COMMIT=$CIRCLE_SHA1' >> "$BASH_ENV"  # port for Jenkins standard env var, used by various scripts
+            source "$BASH_ENV"  # if you need these new env vars in the same run step as well as subsequent ones
+      - run:
+          name: local-step-environment
+          command: echo "$MYVAR"
+          environment:
+            MYVAR: test
+      #
+      # Custom Build Commands
+      #
+      #- run: whoami  # circleci user
+      - run:
+          name: Environment
+          command: env | sort
+      - run: setup/ci_bootstrap.sh
+      - run: make init
+      - run: make
+      # to allow docker networking to work if using 'machine' executor (VM)
+      - run: sudo sysctl net.ipv4.ip_forward=1
+      - run: sudo service docker restart
+      - run: make test
+      - run: echo myparam = << parameters.myparam >>
+      - run:
+          name: post_cleanup
+          command: echo 'runs no matter if the earlier steps failed, eg. for cleanup'
+          when: always  # default: on_success, use 'on_fail' for a recovery step or custom notifications
+      - run:
+          name: Upload CodeCov.io Data
+          command: bash <(curl -s https://codecov.io/bash) -F unittests
+          when: always # Uploads code coverage results, pass or fail
+
+      # from circleci/python orb
+      #
+      #- python/install-packages:
+      #  pkg-manager: pip
+          # app-dir: ~/project/mydir  # path to requirements.txt
+          # pip-dependency-file: dev-requirements.txt  # name of requirements.txt file
+
+      # Install a specific version of NodeJS
+      ##
+      #- run:
+      #    name: "Update Node.js and npm"
+      #    command: |
+      #      curl -sSL "https://nodejs.org/dist/v11.10.0/node-v11.10.0-linux-x64.tar.xz" | sudo tar --strip-components=2 -xJ -C /usr/local/bin/ node-v11.10.0-linux-x64/bin/node
+      #      curl https://www.npmjs.com/install.sh | sudo bash
+      #
+      # call custom command
+      #
+      #- mycommand:
+      #    myarg: "test2"
+
+      # Caching
+      #
+      #    https://circleci.com/docs/2.0/caching/
+      #
+      #- save_cache:  # Caches dependencies with a cache key
+      #    #key: mykey-{{ .Environment.CIRCLE_SHA1 }}
+      #    key: m2-{{ checksum "pom.xml" }}
+      #    paths:
+      #      - ~/go       # /pkg /src
+      #      - ./node_modules
+      #      - ~/.cache   # /pip
+      #      - ~/.cpan
+      #      - ~/.cpanm
+      #      - ~/.gem
+      #      - ~/.m2      # /repository /wrapper
+      #      - ~/.ivy
+      #      - ~/.ivy2    # /cache
+      #      - ~/.gradle  # /caches /wrapper
+      #      - ~/.sbt
+      #      - ~/Library/Caches/pip
+      #      - pytools_checks
+      #
+      #- restore_cache:
+      #    key: mykey-{{ .Environment.CIRCLE_SHA1 }}
+      #    keys:
+      #      - myapp-{{ checksum "package-lock.json" }}
+      #      - m2-{{ checksum "pom.xml" }}
+      #      - m2-  # used if checksum match fails, take the next closest match
+
+      # save only for the duration of the workflow for downstream jobs
+      #- persist_to_workspace:
+      #    root: workspace  # absolute or relative to path from working dir
+      #    paths:
+      #      - echo-output  # relative to root
+      #
+      # restore from workflow workspace
+      #- attach_workspace:
+      #    at: /tmp/workspace  # absolute or relative path from working_dir
+
+      #- store_artifacts: # See circleci.com/docs/2.0/artifacts/ for more details.
+      #    path: /tmp/artifact-1
+      #    destination: artifact-file
+
+  # ============================================================================ #
+  # Simple Terraform Jobs
+  terraform-plan:
+    working_directory: /tmp/project
+    executor: terraform
+    resource_class: small
+    environment:
+      TERRAFORM_IN_AUTOMATION: 1
+    steps:
+      - checkout
+      - run:
+          name: Terraform Init & Plan
+          command: |
+            terraform init -input=false
+            terraform plan -out plan.zip -input=false # -var-file variables.tfvars
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .
+  terraform-apply:
+    executor: terraform
+    resource_class: small
+    environment:
+      TERRAFORM_IN_AUTOMATION: 1
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: Terraform Apply
+          command: |
+            terraform apply plan.zip -input=false -auto-approve
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .
+  terraform-plan-destroy:
+    executor: terraform
+    resource_class: small
+    environment:
+      TERRAFORM_IN_AUTOMATION: 1
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: Terraform create destroy plan
+          command: |
+            terraform plan -destroy -out destroy-plan.zip -input=false # -var-file variables.tfvars
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .
+  terraform-destroy:
+    executor: terraform
+    resource_class: small
+    environment:
+      TERRAFORM_IN_AUTOMATION: 1
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: Terraform Destroy
+          command: |
+            terraform apply destroy-plan.zip -input=false -auto-approve
+
+  # ============================================================================ #
+  # Generalized Terragrunt jobs that can be reused by different workflows
+  terragrunt-plan:
+    executor: terragrunt
+    resource_class: small
+    parameters:
+      env:
+        description: The deployment environment (eg. dev, staging, production)
+        type: string
+      region:
+        description: The cloud region to deploy to eg. eu-west-2
+        type: string
+      module:
+        description: The module to deploy
+        type: string
+      terraform-args:
+        type: string
+        default: ""
+    environment:
+      TERRAFORM_IN_AUTOMATION: 1
+      TERRAGRUNT_WORKING_DIR: ./<<parameters.env>>/<<parameters.region>>/<<parameters.module>>
+    steps:
+      - checkout
+      - terragrunt-plan:
+          terraform-args: <<parameters.terraform-args>>
+  terragrunt-apply:
+    executor: terragrunt
+    resource_class: small
+    parameters:
+      env:
+        description: The deployment environment (eg. dev, staging, production)
+        type: string
+      region:
+        description: The cloud region to deploy to eg. eu-west-2
+        type: string
+      module:
+        description: The module to deploy
+        type: string
+      terraform-args:
+        type: string
+        default: ""
+    environment:
+      TERRAFORM_IN_AUTOMATION: 1
+      TERRAGRUNT_WORKING_DIR: ./<<parameters.env>>/<<parameters.region>>/<<parameters.module>>
+    steps:
+      - checkout
+      - terragrunt-plan:
+          terraform-args: <<parameters.terraform-args>>
+      - terragrunt-apply:
+          terraform-args: <<parameters.terraform-args>>
+
+
+# ============================================================================ #
+#                                C o m m a n d s
+# ============================================================================ #
+
+# command with parameters (can be reused across steps and jobs)
+commands:
+  mycommand:  # XXX: Edit section
+    description: "My description"
+    parameters:
+      myarg:
+        type: string
+        default: "test"
+    steps:
+      - run: echo << parameters.myarg >>
+
+  # ==========================
+  # Re-use terragrunt commands for various environment/module calls
+  terragrunt-plan:
+    parameters:
+      terraform-args:
+        type: string
+        default: ""
+    steps:
+      - run:
+          name: Terragrunt Init & Plan
+          command: |
+            set -eux
+            terragrunt init \
+              --terragrunt-non-interactive
+              -input=false
+            terragrunt plan \
+              --terragrunt-non-interactive \
+              --terragrunt-working-dir ${TERRAGRUNT_WORKING_DIR} \
+              -input=false \
+              -out terragrunt-plan.zip \
+              <<parameters.terraform-args>>
+  terragrunt-apply:
+    parameters:
+      terraform-args:
+        type: string
+        default: ""
+    steps:
+      - run:
+          name: Terragrunt Apply
+          command: |
+            terragrunt apply terragrunt-plan.zip \
+            --terragrunt-non-interactive \
+            --terragrunt-working-dir ${TERRAGRUNT_WORKING_DIR} \
+            -input=false \
+            -auto-approve \
+            <<parameters.terraform-args>>
+  terragrunt-destroy:
+    steps:
+      - run:
+          name: Terragrunt Destroy
+          command: terragrunt destroy --terragrunt-non-interactive --terragrunt-working-dir ${TERRAGRUNT_WORKING_DIR}
+
+
+# ============================================================================ #
+#                               E x e c u t o r s
+# ============================================================================ #
+
+executors:
+  my-executor:  # definition can be reused by multiple jobs
+    parameters:
+      version:
+        description: "docker version tag"
+        default: "lts"
+        type: string
+    docker:
+      #- image: circleci/ruby:2.5.1-node-browsers
+      - image: cimg/node:<<parameters.version>>
+        auth:
+          username: mydockerhub-user
+          password: $DOCKERHUB_PASSWORD  # context / project UI env-var reference
+
+  terraform:
+    parameters:
+      version:
+        description: "hashicorp/terraform docker version tag"
+        default: << pipeline.parameters.terraform_version >>
+        type: string
+    docker:
+      # more important to control terraform version and terraform:light isn't any smaller anyway
+      #- image: docker.mirror.hashicorp.services/hashicorp/terraform:light
+      - image: docker.mirror.hashicorp.services/hashicorp/terraform:<< parameters.version >>
+
+  terragrunt:
+    parameters:
+      version:
+        description: "alpine/terragrunt docker version tag"
+        default: << pipeline.parameters.terraform_version >>
+        type: string
+    docker:
+      - image: alpine/terragrunt:<< parameters.version >>

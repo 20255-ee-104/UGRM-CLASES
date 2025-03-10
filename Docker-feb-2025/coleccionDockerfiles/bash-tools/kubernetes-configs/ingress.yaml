@@ -1,0 +1,257 @@
+#
+#  Author: Hari Sekhon
+#  Date: [% DATE  # 2019-11-28 12:59:41 +0000 (Thu, 28 Nov 2019) %]
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn
+#  and optionally send me feedback to help improve or steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                                 I n g r e s s
+# ============================================================================ #
+
+# https://kubernetes.io/docs/concepts/services-networking/ingress/
+
+# https://kubernetes.io/docs/reference/kubernetes-api/service-resources/ingress-v1/
+
+# https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/annotations/
+
+---
+#apiVersion: extensions/v1beta1  # old
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  # XXX: Edit
+  name: APP
+  namespace: NAMESPACE
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+    # XXX: set if you use an ingress controller that doesn't populate the ingress address field that external-dns uses to publish DNS records
+    #external-dns.alpha.kubernetes.io/target: host.domain.com
+    ingress.kubernetes.io/force-ssl-redirect: "true"
+
+    # ============================================================================ #
+    #                N g i n x   I n g r e s s   C o n t r o l l e r
+    # ============================================================================ #
+    #
+    #   https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/annotations/
+    #
+    #   https://docs.nginx.com/nginx-ingress-controller/configuration/ingress-resources/advanced-configuration-with-annotations/
+    #
+    # Defaults are shown in the docs above and can be verified in the code here:
+    #
+    #   https://github.com/kubernetes/ingress-nginx/blob/main/internal/ingress/controller/config/config.go
+    #
+    #kubernetes.io/ingress.class: nginx  # deprecated, use ingressClassName under spec section for Kubernetes 1.18+
+
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    #nginx.ingress.kubernetes.io/force-ssl-redirect: "true"  # redirect even if the ingress doesn't have TLS
+
+    # =============
+    # Rate Limiting - mitigate DoS / brute force attacks
+    #
+    #   https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/annotations/#rate-limiting
+    #
+    #nginx.ingress.kubernetes.io/limit-connections: 50
+    #nginx.ingress.kubernetes.io/limit-rps: 5   # req/sec
+    #nginx.ingress.kubernetes.io/limit-rpm: 60  # req/min
+    #nginx.ingress.kubernetes.io/limit-whitelist: 10.0.0.0/8,172.16.0.0/12,192.168.0.0./16
+
+    # ======================
+    # rewrite /APP to just /
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    #nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+
+    # ==============================
+    # IP Whitelisting / Blacklisting
+    # XXX: Edit to make available externally or apply common ingress.nginx.patch.yaml with shared IP list eg. Cloudflare
+    # XXX: instead of putting Cloudflare IPs in every ingress - see the ingress-nginx/base/annotations.patch.yaml to apply to all ingresses
+    nginx.ingress.kubernetes.io/whitelist-source-range: |
+      10.0.0.0/8,
+      172.16.0.0/16,
+      192.168.0.0/16
+    #nginx.ingress.kubernetes.io/denylist-source-range: x.x.x.x/y  # block known bad CIDR
+
+    # ============
+    # Mod Security
+    #
+    #   https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/annotations/#modsecurity
+    #
+    #nginx.ingress.kubernetes.io/enable-modsecurity: "true"
+    #nginx.ingress.kubernetes.io/enable-owasp-core-rules: "true"
+
+    # =================
+    # URL Path Blocking eg. Coder block SSH in open source version because enterprise version is expensive
+    #
+    #nginx.ingress.kubernetes.io/configuration-snippet: |
+    #  location ~* /api/v2/deployment/ssh {
+    #    deny all
+    #    return 403
+    #  }
+
+    # ======
+    # Canary
+    #
+    #   https://kubernetes.github.io/ingress-nginx/examples/affinity/cookie/
+    #
+    #nginx.ingress.kubernetes.io/affinity: cookie
+    #nginx.ingress.kubernetes.io/affinity-mode: persistent  # default: "balanced" - rebalances to new pods
+    #nginx.ingress.kubernetes.io/session-cookie-name: MYCOOKIE  # default: INGRESSCOOKIE
+    #nginx.ingress.kubernetes.io/canary: "true"
+    #nginx.ingress.kubernetes.io/canary-weight: 1  # 1%
+    # or
+    #nginx.ingress.kubernetes.io/canary-by-header: "some-header"
+    #nginx.ingress.kubernetes.io/canary-by-header-value: "some-value"
+
+    # ======================
+    # Mirror to test backend
+    #
+    # nginx.ingress.kubernetes.io/mirror-target: https://test.env.com/$request_uri
+
+    # =======
+    # AWS EKS
+    #
+    #   https://aws.amazon.com/premiumsupport/knowledge-center/eks-configure-nginx-ingress-controller/
+    #
+    # nginx.ingress.kubernetes.io/proxy-body-size: 8m
+    # nginx.ingress.kubernetes.io/enable-cors: "true"
+    # nginx.ingress.kubernetes.io/cors-allow-headers: "X-Forwarded-For"
+    # nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    # nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+
+    # ============================================
+    # Enable OpenTracing only for this one ingress
+    #
+    #nginx.ingress.kubernetes.io/enable-opentracing: "true"
+    #zipkin-collector-host: zipkin-collector.zipkin.svc.cluster.local
+    #jaeger-collector-host: jaeger-agent.jaeger.svc.cluster.local
+    #datadog-collector-host: datadog-agent.datadog.svc.cluster.local
+
+    # ============================================================================ #
+    #              T r a e f i k   I n g r e s s   C o n t r o l l e r
+    # ============================================================================ #
+    #
+    #   https://doc.traefik.io/traefik/routing/providers/kubernetes-ingress/
+    #
+    #kubernetes.io/ingress.class: traefik  # deprecated, use ingressClassName under spec section for Kubernetes 1.18+
+    # XXX: without this only serves on HTTP and gets 404 on HTTPS
+    #traefik.ingress.kubernetes.io/router.tls: "true"
+    #hub.traefik.io/access-control-policy: my-policy  # configured on Traefik Hub: https://hub.traefik.io/acp
+    #                                                  <namespace>-<name>@<provider>,<namespace>-<name>@<provider>,...
+    #traefik.ingress.kubernetes.io/router.middlewares: dashboard-basic-auth@kubernetescrd
+    #traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    #traefik.ingress.kubernetes.io/router.middlewares: default-redirectscheme@kubernetescrd
+
+    # ============================================================================ #
+    #                 K o n g   I n g r e s s   C o n t r o l l e r
+    # ============================================================================ #
+    #
+    #   https://docs.konghq.com/kubernetes-ingress-controller/latest/references/annotations/#ingress-resource
+    #
+    #kubernetes.io/ingress.class: kong  # deprecated, use ingressClassName under spec section for Kubernetes 1.18+
+    #konghq.com/strip-path: "true"      # strips the ingress /path before forwarding the request to the service
+    #konghq.com/preserve-host: "true"   # preserve the host header before sending to the service
+    #konghq.com/protocols: https        # used between external clients and Kong ingress
+    #konghq.com/https-redirect-status-code: "308"  # 308 is same as 301 permanent redirect except to instruct user agent to use same method as original request eg. POST
+    #konghq.com/methods: GET,POST       # restrict to only allow these HTTP methods
+    #konghq.com/headers.*: value        # replace * with a header name - only match this ingress if the header with this value is sent by the client
+    #
+    #konghq.com/override: my-kong-ingress  # KongIngress CRD applies full range of Kong settings to this ingress - deprecated, new versions should have native annotation settings
+    #
+    # see kong-plugin-*.yaml where these are defined using CRDs
+    #konghq.com/plugins: ratelimit-by-ip, key-auth, oidc, admin-acl  # choose either simple key-auth or oidc
+
+    # ============================================================================ #
+    #              H A P r o x y   I n g r e s s   C o n t r o l l e r
+    # ============================================================================ #
+    #
+    #   https://www.haproxy.com/documentation/kubernetes/latest/community/configuration-reference/ingress/
+    #
+    #kubernetes.io/ingress.class: haproxy  # deprecated, use ingressClassName under spec section for Kubernetes 1.18+
+    #haproxy.org/ingress.class: haproxy
+    #
+    # See haproxy-values.yaml for more settings applied at global ConfigMap level
+    #
+    # https://www.haproxy.com/documentation/kubernetes/latest/community/configuration-reference/ingress/#load-balance
+    #
+    #haproxy.org/load-balance: leastconn  # default: roundrobin
+    #
+    # kubectl create secret generic -n haproxy haproxy-credentials --from-literal=admin="$(openssl passwd -1 $(aws_secret_get.sh haproxy-admin-password))"
+    #
+    #haproxy.org/auth-type: basic-auth
+    #haproxy.org/auth-secret: haproxy/haproxy-credentials
+    #haproxy.org/auth-realm: Admin Area
+    #
+    #haproxy.org/whitelist: "10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16"
+    #haproxy.org/blacklist: "192.168.1.0/24, 192.168.2.100"
+    #
+    #haproxy.org/check: "true"
+    #haproxy.org/check-http: /health
+    #haproxy.org/check-interval: 30s
+    #haproxy.org/timeout-check: 5s
+    #
+    # https://developers.cloudflare.com/fundamentals/get-started/reference/http-request-headers/
+    #
+    #haproxy.org/src-ip-header: X-Forwarded-For
+    #haproxy.org/src-ip-header: CF-Connecting-IP
+    #haproxy.org/src-ip-header: True-Client-IP  # Enterprise plan only, exactly the same as CF-Connecting-IP, just use that
+    #haproxy.org/forwarded-for: "true"
+    #
+    #haproxy.org/cookie-persistence: mycookie
+    #
+    #haproxy.org/rate-limit-period: 1m
+    #haproxy.org/rate-limit-requests: 100
+    #haproxy.org/rate-limit-size: 1000000
+    #
+    #haproxy.org/server-ssl: "true"
+    #
+    #haproxy.org/backend-config-snippet: |
+    #  http-send-name-header x-dst-server
+    #  stick-table type string len 32 size 100k expire 30m
+    #  stick on req.cook(sessionid)
+
+    # ============================================================================ #
+
+spec:
+  # ingressClassName replaces kubernetes.io/ingress.class annotation in Kubernetes 1.18+
+  #
+  #   https://kubernetes.io/docs/concepts/services-networking/ingress/#deprecated-annotation
+  #
+  # XXX: pick one:
+  ingressClassName: nginx
+  #ingressClassName: traefik
+  #ingressClassName: kong
+  #ingressClassName: haproxy
+  tls:
+    # XXX: Edit
+    - hosts:
+        - APP.DOMAIN.COM
+      # SSL cert auto-generated for this FQDN by Cert Manager ACME integration (see cert-manager.yaml) and saved to this secret name
+      secretName: APP-tls
+  rules:
+    # XXX: Edit
+    - host: APP.DOMAIN.COM
+      http:
+        paths:
+          # XXX: Edit
+          #- path: /APP
+          - path: /
+            pathType: Prefix  # for new networking.k8s.io/v1
+            backend:
+              #serviceName: APP-svc  # Old, for extensions/v1beta1
+              #servicePort: 80
+              service:
+                name: APP-svc  # XXX: Edit - service must exist in the same namespace as the ingress object
+                port:
+                  number: 80
+                  # or
+                  #name: http

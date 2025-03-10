@@ -1,0 +1,332 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2011-06-01 16:58:33 +0000 (Wed, 01 Jun 2011)
+#
+
+# Things to install by hand
+#
+# Xcode - running 'git' is enough to trigger the install
+#
+# Many of these are now available in brew casks - TODO: test and move to brew-packages-desktop-casks.txt
+#
+# Chrome
+# Docker Desktop
+# Google Drive
+# RStudio
+# Sophos Anti-Virus
+# ClamXav
+# Colloquay
+# JConsole
+# Reggy
+# Remote Desktop Connection
+# Skype
+# Spotify
+# Sublime Text 2
+# SynergyOSX
+# TunnelBlick
+# VLC
+# WindowWrangler?
+# Wireshark
+# iPhone Explorer
+
+# Cask installed projects are in adjacent file brew-packages-desktop-casks.txt
+
+# Install from formula on GitHub
+https://raw.githubusercontent.com/jingweno/spotctl/master/Formula/spotctl.rb
+
+# Install HomeBrew Desktop packages - one per line
+ack
+act  # runs GitHub Actions locally
+amazon-ecs-cli
+#amazon-sam-cli  # no longer found
+ansible
+ansible-lint
+archey4  # displays system info in text
+argocd
+asdf
+#atomicparsley  # mp4 cli tool
+autoconf
+autojump
+autossh
+#awsume
+#aws-iam-authenticator
+bash  # version 5, not old version 3 from Apple due to licensing
+#bash-completion  # slows down spawning new shells which I do frequently
+#bazel
+bazelisk  # bazel wrapper downloader like mvnw/gradlew, addes 'bazel' to $PATH so conflicts with bazel package above
+brew-cask-completion
+#duckdb  # open-source in-memory columnar RDBMS, see Knowledge Base for more details: https://github.com/HariSekhon/Knowledge-Base
+cfssl
+#cfn-lint
+checkov
+checkstyle
+circleci
+clamav
+#clair  # container vulnerability scanner by quay.io - this is the server, not clairctl
+cliclick
+cmatrix
+colordiff
+colima  # CLI Docker container runtime (use 'docker' client after 'colima start')
+cosign
+cowsay
+#coreutils # in brew-packages.txt
+csshx
+#ctags
+ctop  # container top
+#cyberduck  # GUI client for FTP, SFTP, WebDAV, Amazon S3, Google Drive etc.
+d2  # declarative diagram language
+dateutils  # strptime, dateadd, dateconv, datediff, dategrep, dateseq, datesort, datetest, datezone - https://www.fresse.org/dateutils/
+dhcping
+dhcpdump
+dialog  # create a curses interactive menu
+diff-so-fancy
+diff-pdf
+#diffutils  # GNU diff, diff3, sdiff, cmp commands - links to /opt/homebrew/bin/ and depending on $PATH ordering may supplant Mac's BSD diff
+direnv
+disk-inventory-x
+dive  # analyze docker image layers
+dnsmasq
+dnstop
+docker-completion
+docker-compose-completion
+doctl  # Digital Ocean CLI
+dos2unix
+drone-cli
+e2fsprogs
+#ec2-api-tools
+eksctl
+entr  # execute commands upon file changes
+expect
+etcd
+exiftool  # view image metadata
+exiv2     # view image metadata
+#ext4fuse  # to read Linux partitions eg. on external hard drives
+ffmpeg
+#filezilla  # GUI ftp client - not found
+fish
+flyscrape
+fortune
+fswatch
+fzf
+gcc
+gem-completion
+#gh  # GitHub CLI - moved to core packages
+gimp
+#git  # comes with macOS XCode
+git-credential-manager  # prompts for HTTPS creds in browser and caches them locally to HTTPS checkouts
+git-lfs
+git-filter-repo  # recommended to use instead of 'git filter-branch' in its man page
+#gnu-sed  # in brew-packages.txt
+#gnupg
+gnupg2
+gnuplot
+gping  # graphs pings in terminal interactive ascii art
+gradle
+#gradle-completion  # forces bash-completion which slows down my shells
+#grafana
+graphviz  # for the 'dot' command (use with terraform graph), and also github.com/HariSekhon/Diagrams-as-Code
+gron  # flattens JSON to be greppable
+#groovy  # see near end
+#groovysdk  # see near end
+hadolint
+haproxy
+helm
+hexyl  # hex command line viewer - https://github.com/sharkdp/hexyl
+htop
+http-toolkit  # HTTP intercepting debugger
+hub
+hugo  # static website generator - https://gohugo.io/getting-started/quick-start/
+id3v2  # mp3 tag cli editor
+#id3lib  # mp3 tag manipulation
+iftop
+imagemagick
+#inetutils  # GNU telnet, ftp, tftp, inetd, syslog, ping, traceroute, whois - prefixed with g
+infracost  # Cloud cost estimator for Terraform code
+ipcalc
+iperf
+ipython
+#isc-dhcp  # the classic DHCP daemon, use for bootstrapping PXE installing Debian Linux or similar as per https://github.com/HariSekhon/Knowledge-Base/blob/main/dhcp.md
+#intellij-idea-ce
+jsonlint  # in brew-packages.txt
+jenkins-x/jx/jx
+jnv  # json interactive viewer (pipe kubectl into it)
+#jpeg
+#jq  # in brew-packages.txt
+jruby
+jython
+k3d  # wrapper for k3s
+k6
+kind  # Kubernetes in Docker
+kompose
+knative/client/kn
+knative-sandbox/kn-plugins/quickstart
+kops
+#kubectl  # old version, download binary or use GCloud SDK version
+kubernetes-cli
+kubeseal  # Bitnami Sealed Secrets
+kubevious  # validation linter for Kubernetes yaml
+kustomize
+#lame  # mp3 encoder
+launchctl-completion
+#libpng
+#libtiff
+#libusb
+lolcat
+lynx
+#lzo
+#lz4
+m4  # classic macro processor
+#makedepend  # Makefile dependencies for C
+#maven
+maven-completion
+maven-shell
+#md5sha1sum  # clashes with coreutils
+media-info  # read mp3 tags
+mercurial
+ubuntu/microk8s/microk8s
+midnight-commander
+minio
+#mitmproxy
+mosh
+# nagios-plugins clashes
+monitoring-plugins
+mplayer
+mpssh
+mtr
+mycli
+mysql
+neovim
+netcat
+ngrep
+nmap
+#node  # NodeJS
+#ntfstool  # for accessing NTFS volumes - unsigned requires Security approval and installing kernel driver
+#octave
+#openjpeg
+#oniguruma  # regex library
+#osxfuse  # required to be installed before 'ext4fuse' package
+p7zip
+packer-completion
+pandoc
+#parallel  # in brew-packages.txt
+parquet-tools
+#pcre
+#pcre2
+perltidy
+pgcli
+pgformatter
+pigz  # parallel gzip
+pinentry
+pinentry-mac
+pip-completion
+pipenv
+pipx
+#pk11-kit
+pluto  # by FairwindsOps - detect outdated Kubernetes API objects
+postgresql
+pre-commit
+prestosql
+#protobuf
+pssh
+pstree
+pup  # parse html from command line
+pwgen
+#pygments  # in pip-packages-desktop.txt
+#python  # in brew-packages.txt
+#pipenv
+#pyenv
+qemu
+r
+rancher-cli
+rbenv
+#rclone  # like rsync for S3 / GCS / SFTP / HDFS / SMB / HTTP
+rdesktop
+#redis
+#readline  # in brew-packages.txt
+#restic  # backup program, tracks versions, backups to a local repo dir / SFTP / Restic server http(s) / S3 / GCS / MinIO / Rclone
+rlwrap
+#rtmpdump
+ruby  # Mac ruby is too old to install Travis CI
+ruby-completion
+#sbt  # see near end
+#scala  # see near end
+screen  # get newer version for -Q switch, will use different sockets directory
+s3cmd
+scalastyle
+semgrep
+siege
+#six  # Python 2 to 3 conversion
+skaffold
+skopeo
+shpotify
+smartmontools
+snappy
+sonar-completion
+sonar-scanner
+sqlite
+sqlparse  # SQL reformatter
+ssllabs-scan
+sslscan
+ssh-copy-id
+stats  # fancier Activity Monitor
+#steghide  # looks like it's been removed
+#subversion  # pulls in brew version of Perl which breaks library installations due to this horror - https://github.com/toddr/IO-Tty/issues/25
+#terraform  # use tfenv with direnv to match your company's version and avoid accidentally upgrading the tfstate
+#terragrunt  # old, use install/install_terragrunt.sh to grab latest version to ~/bin instead
+#terraformer  # large, install only if actively using
+tfenv  # Terraform version manager inspired by rbenv
+tflint # Terraform linter
+tfsec  # Terraform static analysis by AquaSec
+thrift
+tidy-html5
+tree
+tmux
+urlview  # used by tmux plugin tmux-urlview, and also my advanced .vimrc
+unix2dos
+#unrar  # no longer available
+utimer
+vagrant-completion
+vault  # Hashicorp
+# old Mac vim not
+vim  # Mac's vim not syntax highlighting Bash properly on macOS Big Sur 11.7 https://github.com/vim/vim/issues/11937 - watch brew version pulls in a lot of dependencies though including Perl which breaks library installations due to this horror - https://github.com/toddr/IO-Tty/issues/25
+vint  # vim script linter (for me to lint my big .vimrc)
+#vscode
+watch
+watchexec  # run commands when files change
+#wget  # in brew-packages.txt
+#whois  # in brew-packages.txt
+wireshark  # only install tshark CLI, must --cask for Wireshark
+#webp
+xclip
+#x264
+#x265
+#xvid
+xz
+yamllint  # in brew-packages.txt
+#yara
+youtube-dl
+#zeromq
+#zlib
+#zstd
+zoom
+zsh
+
+# runtime only
+#groovy
+# GDK - use SDKMan instead (install/install_sdkman.sh)
+#groovysdk
+# done by SDKMan now
+#maven
+#sbt
+#scala
+
+# no longer available
+#jwhois
+
+# clashes with docker and needs unlinking - don't use this any more anyway since Docker Desktop arrived
+#docker-machine-completion
+
+# automake
+# autoconf
+# Mac already supplies a libtool, so this gets prefixed with a 'g'
+# libtool

@@ -1,0 +1,458 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2021-06-10 18:26:29 +0100 (Thu, 10 Jun 2021)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                          A r g o C D   P r o j e c t
+# ============================================================================ #
+
+# https://argo-cd.readthedocs.io/en/stable/operator-manual/declarative-setup/#projects
+
+# manages a given ArgoCD project and settings
+
+# if using projects.yaml App-of-Projects pattern you can just drop this into the argocd/projects directory in git to add it dynamically,
+# or conversely delete or rename it to a different suffix such .disabled to have it auto-removed from ArgoCD
+
+# See this script to easily (re)generate the whitelist for your specific cluster:
+#
+#   https://github.com/HariSekhon/Kubernetes-configs/blob/master/kubernetes/argocd_generate_resource_whitelist.sh
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  # XXX: Edit
+  name: NAME
+  namespace: argocd  # must be the namespace where ArgoCD was installed - usually 'argocd'
+  # Finalizer that ensures that project is not deleted until it is not referenced by any application
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  # XXX: Edit
+  description: DESCRIPTION
+  # give UI option to show orphaned resources but don't raise annoying warnings as this is quite common
+  orphanedResources:
+    warn: false
+
+  # Allow manifests to deploy from any Git repos
+  sourceRepos:
+    - '*'
+
+  # Only permit applications to deploy to the NAMESPACE namespace in the same cluster
+  destinations:
+    # XXX: Edit
+    - namespace: NAMESPACE  # don't include 'default' namespace as you shouldn't be using that for anything
+      #
+      # XXX: set to external Master URL for deployments to other clusters
+      server: https://kubernetes.default.svc
+      #
+      # XXX: Edit - set to whatever you named your Kubernetes clusters in ArgoCD if deploying to external clusters
+      #
+      # XXX: must use 'server' key even for cluster name as 'name' key is not used here, only in apps
+      #
+      #server: in-cluster  # XXX: DOES NOT WORK FOR REPLACING THE DEFAULT https://kubernetes.default.svc, can only do this with additional cluster names - 'in-cluster' in apps works regardless
+
+    - namespace: kube-system  # needed for Cert Manager roles for cainjector leader election
+      server: https://kubernetes.default.svc  # XXX: Edit
+    - namespace: argocd
+      server: https://kubernetes.default.svc  # XXX: Edit
+    - namespace: cattle-system
+      server: https://kubernetes.default.svc  # XXX: Edit
+    - namespace: cert-manager
+      server: https://kubernetes.default.svc  # XXX: Edit
+    - namespace: circleci
+      server: https://kubernetes.default.svc  # XXX: Edit
+    - namespace: datadog
+      server: https://kubernetes.default.svc  # XXX: Edit
+    - namespace: docker
+      server: https://kubernetes.default.svc  # XXX: Edit
+    - namespace: external-dns
+      server: https://kubernetes.default.svc  # XXX: Edit
+    - namespace: external-secrets
+      server: https://kubernetes.default.svc  # XXX: Edit
+    - namespace: github-actions
+      server: https://kubernetes.default.svc  # XXX: Edit
+    - namespace: goldilocks
+      server: https://kubernetes.default.svc  # XXX: Edit
+    - namespace: ingress-nginx
+      server: https://kubernetes.default.svc  # XXX: Edit
+    - namespace: jenkins
+      server: https://kubernetes.default.svc  # XXX: Edit
+    - namespace: kong
+      server: https://kubernetes.default.svc  # XXX: Edit
+    - namespace: keycloak
+      server: https://kubernetes.default.svc  # XXX: Edit
+    - namespace: kubernetes-dashboard
+      server: https://kubernetes.default.svc  # XXX: Edit
+    - namespace: polaris
+      server: https://kubernetes.default.svc  # XXX: Edit
+    - namespace: prometheus
+      server: https://kubernetes.default.svc  # XXX: Edit
+    - namespace: selenium
+      server: https://kubernetes.default.svc  # XXX: Edit
+    - namespace: traefik
+      server: https://kubernetes.default.svc  # XXX: Edit
+    - namespace: trivy
+      server: https://kubernetes.default.svc  # XXX: Edit
+
+  # Deny all cluster-scoped resources from being created, except for these
+  clusterResourceWhitelist:
+    # needed to deploy metrics-server to EKS
+    - group: apiregistration.k8s.io
+      kind: APIService
+    #- group: storage.k8s.io
+    #  kind: CSIDriver
+    #- group: storage.k8s.io
+    #  kind: CSINode
+    - group: certificates.k8s.io
+      kind: CertificateSigningRequest
+    - group: external-secrets.io
+      kind: ClusterExternalSecret
+    - group: external-secrets.io/v1beta1
+      kind: ClusterExternalSecret
+    - group: cert-manager.io
+      kind: ClusterIssuer
+    # needed for Polaris kustomization
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRoleBinding
+    - group: external-secrets.io
+      kind: ClusterSecretStore
+    - group: external-secrets.io/v1beta1
+      kind: ClusterSecretStore
+    #- group: v1
+    #  kind: ComponentStatus
+    # needed for Cert-Manager
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+    #- group: flowcontrol.apiserver.k8s.io/v1beta1
+    #  kind: FlowSchema
+    - group: networking.k8s.io
+      kind: IngressClass
+    - group: configuration.konghq.com
+      kind: KongClusterPlugin
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+    - group: ''
+      kind: Namespace
+    - group: v1
+      kind: Namespace
+    #- group: ''
+    #  kind: Node
+    #- group: v1
+    #  kind: Node
+    #- group: metrics.k8s.io/v1beta1
+    #  kind: NodeMetrics
+    #- group: ''
+    #  kind: PersistentVolume
+    #- group: v1
+    #  kind: PersistentVolume
+    # for kube-prometheus-stack
+    - group: policy
+      kind: PodSecurityPolicy
+    #- group: policy/v1beta1
+    #  kind: PodSecurityPolicy
+    - group: scheduling.k8s.io
+      kind: PriorityClass
+    #- group: flowcontrol.apiserver.k8s.io/v1beta1
+    #  kind: PriorityLevelConfiguration
+    #- group: node.k8s.io
+    #  kind: RuntimeClass
+    #- group: authorization.k8s.io
+    #  kind: SelfSubjectAccessReview
+    #- group: authorization.k8s.io
+    #  kind: SelfSubjectRulesReview
+    - group: storage.k8s.io
+      kind: StorageClass
+    #- group: authorization.k8s.io
+    #  kind: SubjectAccessReview
+    #- group: authentication.k8s.io
+    #  kind: TokenReview
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+    #- group: storage.k8s.io
+    #  kind: VolumeAttachment
+    #- group: snapshot.storage.k8s.io
+    #  kind: VolumeSnapshotClass
+    #- group: snapshot.storage.k8s.io
+    #  kind: VolumeSnapshotContent
+
+  # Allow all namespaced-scoped resources to be created, except for ResourceQuota, LimitRange, NetworkPolicy
+  #namespaceResourceBlacklist:
+  #  - group: ''
+  #    kind: ResourceQuota
+  #  - group: ''
+  #    kind: LimitRange
+  #  - group: ''
+  #    kind: NetworkPolicy
+
+  # Deny all namespaced-scoped resources from being created, except for ones explicitly listed here
+  # populated by script argocd_namespace_resource_whitelist.sh from YAML from https://github.com/HariSekhon/DevOps-Bash-tools/
+  # and from script argocd_generate_resource_whitelist.sh from both Kubernetes API and existing project YAML
+  namespaceResourceWhitelist:
+    - group: generators.external-secrets.io/v1alpha1
+      kind: ACRAccessToken
+    - group: notification.toolkit.fluxcd.io/v1beta1
+      kind: Alert
+    - group: jenkins.io
+      kind: App
+    - group: argoproj.io/v1alpha1
+      kind: AppProject
+    - group: argoproj.io/v1alpha1
+      kind: Application
+    - group: argoproj.io/v1alpha1
+      kind: ApplicationSet
+    - group: cloud.google.com
+      kind: BackendConfig
+    - group: ''
+      kind: Binding
+    - group: v1
+      kind: Binding
+    - group: source.toolkit.fluxcd.io/v1beta1
+      kind: Bucket
+    - group: jenkins.io
+      kind: BuildPack
+    #- group: storage.k8s.io/v1beta1
+    #  kind: CSIStorageCapacity
+    #- group: internal.autoscaling.gke.io/v1alpha1
+    #  kind: CapacityRequest
+    #- group: internal.autoscaling.k8s.io/v1alpha1
+    #  kind: CapacityRequest
+    - group: cert-manager.io
+      kind: Certificate
+    - group: cert-manager.io
+      kind: CertificateRequest
+    #- group: acme.cert-manager.io
+    #  kind: Challenge
+    #- group: jenkins.io
+    #  kind: CommitStatus
+    - group: ''  # ArgoCD doesn't show using v1
+      kind: ConfigMap
+    - group: v1
+      kind: ConfigMap
+    - group: apps
+      kind: ControllerRevision
+    - group: batch
+      kind: CronJob
+    - group: apps
+      kind: DaemonSet
+    - group: datadoghq.com/v2alpha1
+      kind: DatadogAgent
+    - group: datadoghq.com/v1alpha1
+      kind: DatadogMonitor
+    - group: apps
+      kind: Deployment
+    - group: generators.external-secrets.io/v1alpha1
+      kind: ECRAuthorizationToken
+    - group: discovery.k8s.io
+      kind: EndpointSlice
+    - group: ''
+      kind: Endpoints
+    - group: v1
+      kind: Endpoints
+    - group: jenkins.io
+      kind: Environment
+    - group: jenkins.io
+      kind: EnvironmentRoleBinding
+    - group: events.k8s.io
+      kind: Event
+    - group: ''
+      kind: Event
+    - group: v1
+      kind: Event
+    - group: jenkins.io
+      kind: Extension
+    - group: external-secrets.io
+      kind: ExternalSecret
+    - group: external-secrets.io/v1beta1
+      kind: ExternalSecret
+    - group: jenkins.io
+      kind: Fact
+    #- group: generators.external-secrets.io/v1alpha1
+    #  kind: Fake
+    #- group: networking.gke.io/v1beta1
+    #  kind: FrontendConfig
+    - group: generators.external-secrets.io/v1alpha1
+      kind: GCRAccessToken
+    - group: source.toolkit.fluxcd.io/v1beta1
+      kind: GitRepository
+    - group: jenkins.io
+      kind: GitService
+    - group: source.toolkit.fluxcd.io/v1beta1
+      kind: HelmChart
+    - group: helm.toolkit.fluxcd.io/v2beta1
+      kind: HelmRelease
+    - group: source.toolkit.fluxcd.io/v1beta1
+      kind: HelmRepository
+    - group: autoscaling
+      kind: HorizontalPodAutoscaler
+    - group: extensions  # old ingress
+      kind: Ingress
+    - group: extensions/v1beta1 # old ingress
+      kind: Ingress
+    - group: networking.k8s.io  # new ingress
+      kind: Ingress
+    - group: traefik.containo.us
+      kind: IngressRoute
+    - group: cert-manager.io
+      kind: Issuer
+    - group: batch
+      kind: Job
+    - group: configuration.konghq.com
+      kind: KongConsumer
+    - group: configuration.konghq.com
+      kind: KongPlugin
+    - group: kustomize.toolkit.fluxcd.io/v1beta1
+      kind: Kustomization
+    #- group: coordination.k8s.io
+    #  kind: Lease
+    - group: ''
+      kind: LimitRange
+    - group: v1
+      kind: LimitRange
+    #- group: authorization.k8s.io
+    #  kind: LocalSubjectAccessReview
+    #- group: networking.gke.io
+    #  kind: ManagedCertificate
+    - group: traefik.containo.us
+      kind: Middleware
+    #- group: autoscaling.gke.io/v1beta1
+    #  kind: MultidimPodAutoscaler
+    - group: networking.k8s.io
+      kind: NetworkPolicy
+    - group: acme.cert-manager.io
+      kind: Order
+    #- group: generators.external-secrets.io/v1alpha1
+    #  kind: Password
+    - group: ''  # need this for ArgoCD 2.2+ to show you pods
+      kind: Pod
+    - group: v1  # doesn't work to show you in ArgoCD
+      kind: Pod
+    - group: ''
+      kind: PersistentVolumeClaim
+    - group: v1
+      kind: PersistentVolumeClaim
+    #- group: jenkins.io
+    #  kind: PipelineActivity
+    #- group: jenkins.io
+    #  kind: PipelineStructure
+    - group: jenkins.io
+      kind: Plugin
+    - group: policy
+      kind: PodDisruptionBudget
+    #- group: metrics.k8s.io/v1beta1
+    #  kind: PodMetrics
+    - group: ''
+      kind: PodTemplate
+    - group: v1
+      kind: PodTemplate
+    - group: notification.toolkit.fluxcd.io/v1beta1
+      kind: Provider
+    - group: external-secrets.io/v1alpha1
+      kind: PushSecret
+    - group: notification.toolkit.fluxcd.io/v1beta1
+      kind: Receiver
+    - group: jenkins.io
+      kind: Release
+    - group: apps
+      kind: ReplicaSet  # need this for ArgoCD 2.2+ to show you replica sets
+    - group: ''
+      kind: ReplicationController
+    - group: v1
+      kind: ReplicationController
+    - group: ''
+      kind: ResourceQuota
+    - group: v1
+      kind: ResourceQuota
+    - group: rbac.authorization.k8s.io
+      kind: Role
+    - group: rbac.authorization.k8s.io
+      kind: RoleBinding
+    #- group: scalingpolicy.kope.io/v1alpha1
+    #  kind: ScalingPolicy
+    - group: jenkins.io
+      kind: Scheduler
+    - group: bitnami.com
+      kind: SealedSecret
+    - group: bitnami.com/v1alpha1
+      kind: SealedSecret
+    - group: ''
+      kind: Secret  # XXX: if you're managing this you're doing it wrong, used SealedSecret or ExternalSecret instead
+    - group: v1
+      kind: Secret
+    - group: external-secrets.io
+      kind: SecretStore
+    - group: external-secrets.io/v1beta1
+      kind: SecretStore
+    - group: ''
+      kind: Service
+    - group: v1
+      kind: Service
+    - group: ''
+      kind: ServiceAccount
+    - group: v1
+      kind: ServiceAccount
+    #- group: networking.gke.io/v1beta1
+    #  kind: ServiceAttachment
+    #- group: networking.gke.io/v1beta1
+    #  kind: ServiceNetworkEndpointGroup
+    - group: jenkins.io
+      kind: SourceRepository
+    - group: jenkins.io
+      kind: SourceRepositoryGroup
+    - group: apps
+      kind: StatefulSet
+    - group: jenkins.io
+      kind: Team
+    - group: nodemanagement.gke.io/v1alpha1
+      kind: UpdateInfo
+    - group: jenkins.io
+      kind: User
+    - group: generators.external-secrets.io/v1alpha1
+      kind: VaultDynamicSecret
+    - group: autoscaling.k8s.io
+      kind: VerticalPodAutoscaler
+    - group: autoscaling.k8s.io
+      kind: VerticalPodAutoscalerCheckpoint
+    - group: snapshot.storage.k8s.io
+      kind: VolumeSnapshot
+    - group: jenkins.io
+      kind: Workflow
+    # for kube-prometheus-stack
+    - group: monitoring.coreos.com
+      kind: '*'
+
+  roles:
+    # A role which provides read-only access to all applications in the project
+    - name: read-only
+      description: Read-only privileges to NAME  # XXX: Edit
+      policies:
+        - p, proj:my-project:read-only, applications, get, NAME/*, allow  # XXX: Edit
+      groups:
+        # XXX: Edit
+        - my-oidc-group
+
+    # A role which provides sync privileges to only the guestbook-dev application, e.g. to provide
+    # sync privileges to a CI system
+    - name: ci-role
+      description: Sync privileges for guestbook-dev
+      policies:
+      # XXX: Edit
+        - p, proj:PROJECT:ci-role, applications, sync, NAME/APP, allow
+      # NOTE: JWT tokens can only be generated by the API server and the token is not persisted
+      # anywhere by Argo CD. It can be prematurely revoked by removing the entry from this list.
+      jwtTokens:
+        - iat: 1535390316

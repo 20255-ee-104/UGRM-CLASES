@@ -1,0 +1,141 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2021-12-13 23:59:48 +0000 (Mon, 13 Dec 2021)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn
+#  and optionally send me feedback to help improve or steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#              C i r c l e C I   R u n n e r   D e p l o y m e n t
+# ============================================================================ #
+
+# Requirements:
+#
+#
+#   1. Runner Token, generate it using CircleCI CLI like so:
+#
+#         circleci runner resource-class create <namespace>/<resource> "description" --generate-token
+#     eg.
+#         circleci runner resource-class create harisekhon/k8s-runner "Kubernetes Runner" --generate-token
+#
+#
+#   2. Upload runner token to Kubernetes secret:
+#
+#       kubectl create secret generic circleci-runner -n circleci --from-literal=token=...
+#
+#
+#   3. Configure the CircleCI resource-class this agent should registry against
+#
+#       kubectl create configmap circleci-runner -n circleci --from-literal=resource-class=<namespace>/<resource>
+#   eg.
+#       kubectl create configmap circleci-runner -n circleci --from-literal=resource-class=harisekhon/k8s-runner
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: circleci-runner
+  namespace: circleci
+  labels:
+    app: circleci-runner
+  annotations:
+    cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+spec:
+  selector:
+    matchLabels:
+      app: circleci-runner
+  #replicas: 1  # XXX: don't define replicas if using HPA
+  template:
+    metadata:
+      labels:
+        app: circleci-runner
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  # gke-preemptible not valid on GKE AutoPilot clusters - remove in that case and leave only gke-spot
+                  - key: cloud.google.com/gke-preemptible
+                    operator: DoesNotExist
+                  - key: cloud.google.com/gke-spot
+                    operator: DoesNotExist
+                  - key: eks.amazonaws.com/capacityType
+                    operator: NotIn
+                    values:
+                      - SPOT
+                  - key: kubernetes.azure.com/scalesetpriority
+                    operator: NotIn
+                    values:
+                      - spot
+      restartPolicy: Always
+      serviceAccountName: circleci-runner
+      automountServiceAccountToken: false
+      #securityContext:
+      #  runAsNonRoot: true  # Error: container has runAsNonRoot and image has non-numeric user (circleci), cannot verify user is non-root
+      terminationGracePeriodSeconds: 7200  # should be the same as the job timeout setting to allow the launch-agent to drain
+      containers:
+        - name: circleci-runner
+          image: circleci/runner:launch-agent
+          #image: harisekhon/circleci-runner  # contains extra build dependencies
+          imagePullPolicy: Always  # since this is a mutable tag
+          #
+          # https://circleci.com/docs/2.0/runner-config-reference/
+          #
+          env:
+            - name: CIRCLECI_RESOURCE_CLASS
+              #value: harisekhon/k8s-runner
+              valueFrom:
+                configMapKeyRef:
+                  key: resource-class
+                  name: circleci-runner
+            - name: CIRCLECI_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: circleci-runner
+                  key: token
+            - name: LAUNCH_AGENT_RUNNER_MAX_RUN_TIME
+              value: 2h  # default: 5 hours
+            #
+            # these two aren't of much benefit as they merely cause Completed state exits and container restarts in the same pod, racking up the Restart count for the pod
+            #
+            #- name: LAUNCH_AGENT_RUNNER_MODE
+            #  value: single-task
+            #- name: LAUNCH_AGENT_RUNNER_IDLE_TIMEOUT
+            #  value: 10m
+            #
+            #- name: LAUNCH_AGENT_RUNNER_NAME
+            #  value: somename  # defaults to the hostname, in this case the pod name
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - ps -ef | grep circleci-launch-agent
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - ps -ef | grep circleci-launch-agent
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi  # TODO: tune via Goldilocks recommendations

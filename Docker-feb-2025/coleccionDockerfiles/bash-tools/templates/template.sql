@@ -1,0 +1,14 @@
+--
+--  Author: Hari Sekhon
+--  Date: [% DATE # 2008-10-20 16:28:46 +0100 (Mon, 20 Oct 2008) %]
+--
+--  vim:ts=4:sts=4:sw=4:et:filetype=sql
+--
+--  [% URL %]
+--
+--  [% LICENSE %]
+--
+--  [% MESSAGE %]
+--
+--  [% LINKEDIN %]
+--

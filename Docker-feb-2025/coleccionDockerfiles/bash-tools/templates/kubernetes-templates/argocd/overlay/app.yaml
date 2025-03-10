@@ -1,0 +1,84 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2021-06-10 10:35:49 +0100 (Thu, 10 Jun 2021)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                      A r g o C D   A p p l i c a t i o n
+# ============================================================================ #
+
+# https://argo-cd.readthedocs.io/en/stable/operator-manual/declarative-setup/#applications
+
+# manages a given Kubnernetes application via Kustomize or Helm
+
+# if using apps.yaml App-of-Apps pattern you can just drop this into the argocd/apps directory in git to add it dynamically,
+# or conversely delete or rename it to a different suffix such .disabled to have it auto-removed from ArgoCD apps
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  # XXX: Edit
+  name: APP
+  namespace: argocd  # must be whichever namespace you installed ArgoCD to - usually 'argocd' by default
+  # enable finalizer if you want removal of ArgoCD application to cause a cascading delete to the underlying Kubernetes objects eg. deployments
+  #finalizers:
+  #  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    # ================================================
+    # Kustomize / Manifests (including Kustomize+Helm)
+    #
+    # XXX: Edit - url to Git repo containing your k8s manifests
+    #repoURL: git@github.com:argoproj/argocd-example-apps.git
+    # XXX: use https url for repo if using Kustomize external tagged bases to same private repo requiring authentication - alternatively see solution git-askpass.repo-server.jsonpatch.yaml
+    repoURL: https://github.com/argoproj/argocd-example-apps.git  # keep .git suffix for GitLab, otherwise it'll 301 redirect which ArgoCD doesn't follow
+    targetRevision: HEAD
+    # XXX: Edit - path to k8s manifiests
+    path: dir/path/to/k8s/manifests  # relative to root of git repo so no leading slash
+    #
+    # ================================================
+    # straight Helm (prefer Kustomize way above as it's more declarative)
+    #
+    #   https://argo-cd.readthedocs.io/en/stable/user-guide/helm/
+    #
+    # XXX: values file must be set non-GitOps, eg:
+    #
+    #       argocd app set APP --values values.yaml
+    #
+    #chart: APP # specify chart instead of path if deploying a Helm app
+    #repoURL: https://artifacthub.io/packages/helm/<ORG>/<CHART>
+    #targetRevision: N.N.N
+    #helm:
+    #  releaseName: APP
+    #  values: |
+    #    <some_yaml>
+  destination:
+    # prefer name over server now, it's less error prone
+    #server: https://kubernetes.default.svc
+    # XXX: Edit - set to whatever you named your Kubernetes clusters in ArgoCD if deploying to external clusters
+    name: in-cluster  # must match the NAME field in the /settings/clusters page
+    # XXX: Edit - where to deploy APP to
+    namespace: NAMESPACE
+  syncPolicy:
+    #automated: {}  # without self-healing or pruning
+    automated:
+      selfHeal: true
+      prune: false   # safe by default
+    syncOptions:
+      - ApplyOutOfSyncOnly=false  # true is quicker but doesn't record history, cannot rollback, and hooks aren't run
+      #- CreateNamespace=true  # prefer to put the namespace in the Kustomization for portability
+      #- ServerSideApply=true  # ArgoCD 2.5+ to avoid "Too long: must have at most 262144 bytes" error caused by large CRDs
+                               # https://kubernetes.io/docs/reference/using-api/server-side-apply/

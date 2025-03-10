@@ -1,0 +1,60 @@
+#
+#  Author: Hari Sekhon
+#  Date: Tue Jan 11 10:39:02 2022 +0000
+#
+#  vim:ts=2:sts=2:sw=2:et
+#
+#  https://github.com/HariSekhon/GitHub-Actions
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                   T F s e c   G i t H u b   W o r k f l o w
+# ============================================================================ #
+
+# Comments on any PR that adds transgressions
+
+# https://aquasecurity.github.io/tfsec/v0.63.1/getting-started/configuration/github-actions/pr-commenter/
+
+---
+name: tfsec-pr-commenter
+
+on:
+  workflow_call:
+    inputs:
+      debug:
+        type: string
+        required: false
+        default: false
+
+permissions:
+  contents: read
+  pull-requests: write
+
+defaults:
+  run:
+    shell: bash -euxo pipefail {0}
+
+env:
+  DEBUG: ${{ inputs.debug == true || github.event.inputs.debug == 'true' || '' }}
+
+jobs:
+  tfsec:
+    name: tfsec PR commenter
+    runs-on: ubuntu-latest
+    steps:
+      - name: Environment
+        run: env | sort
+
+      - uses: actions/checkout@v3
+
+      - name: tfsec
+        #uses: aquasecurity/tfsec-pr-commenter-action@5e9f770638057da497182661aacbf640ca94f4e9
+        uses: aquasecurity/tfsec-pr-commenter-action@main
+        with:
+          github_token: ${{ github.token }}
+          # or
+          #github_token: ${{ secrets.GITHUB_TOKEN }}

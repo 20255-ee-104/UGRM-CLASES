@@ -1,0 +1,124 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2021-02-23 12:53:33 +0000 (Tue, 23 Feb 2021)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                      J e n k i n s   C I   -   A g e n t
+# ============================================================================ #
+
+# Pod template for Kubernetes Cloud Configuration - copy this to "Raw YAML for the Pod" in Configure Clouds -> Kubernetes
+
+# https://plugins.jenkins.io/kubernetes/
+#
+# https://hub.docker.com/r/jenkins/inbound-agent/
+
+# XXX: see my Jenkinsfile for a better way using Pipeline embedded pod template using native k8s pod,
+#      avoid agent { docker ... } and instead use agent { kubernetes ... }
+#
+#   https://github.com/HariSekhon/Templates/blob/master/Jenkinsfile
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: jenkins-agent
+  namespace: jenkins
+  labels:
+    app: jenkins-agent
+    profile: cloud
+  annotations:
+    cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+spec:
+  # agent pod should go on stable node pool so that builds don't fail due to preemption. Requires priorityclass.yaml
+  priorityClassName: high-priority  # requires priorityclass.yaml
+  affinity:
+    # avoid preemption which can cause build failures
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              # gke-preemptible not valid on GKE AutoPilot clusters - remove in that case and leave only gke-spot
+              - key: cloud.google.com/gke-preemptible
+                operator: DoesNotExist
+              - key: cloud.google.com/gke-spot
+                operator: DoesNotExist
+              - key: eks.amazonaws.com/capacityType
+                operator: NotIn
+                values:
+                  - SPOT
+              - key: kubernetes.azure.com/scalesetpriority
+                operator: NotIn
+                values:
+                  - spot
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            topologyKey: topology.kubernetes.io/zone
+            labelSelector:
+              matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                    - jenkins-agent
+        - weight: 100
+          podAffinityTerm:
+            topologyKey: kubernetes.io/hostname
+            labelSelector:
+              matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                    - jenkins-agent
+  securityContext:
+    runAsUser: 0    # required to access docker.sock
+    #fsGroup: 1000  # jenkins gid to access docker.sock, but fails to change socket group owner in container
+  containers:
+    # must override this exact container name as this is where builds get executed
+    - name: jnlp
+      # there is no lts tag at this time
+      #image: jenkins/inbound-agent:4.6-1
+      # based off jenkins/inbound-agent but with docker command installed
+      image: harisekhon/jenkins-agent-docker:4.6
+      imagePullPolicy: IfNotPresent
+      readinessProbe:
+        tcpSocket:
+          port: 50001
+        #exec:
+        #  command:
+        #    - pgrep -f hudson.remoting.jnlp.Main
+      livenessProbe:
+        tcpSocket:
+          port: 50001
+        #exec:
+        #  command:
+        #    - pgrep -f hudson.remoting.jnlp.Main
+      resources:
+        requests:
+          cpu: 100m      # agent takes 6m resting, don't overallocate, drives node pool scaling costing $$$
+          memory: 500Mi  # agent takes 108Mi resting, plus whatever you run in the CI pipeline
+        limits:
+          cpu: "2"
+          memory: 3Gi
+      volumeMounts:
+        # XXX: for DooD - Docker-out-of-Docker - only do this if you trust all Jenkins users!!!
+        - name: docker-sock
+          mountPath: /var/run/docker.sock
+  volumes:
+    # XXX: for DooD - Docker-out-of-Docker - only do this if you trust all Jenkins users!!!
+    - name: docker-sock
+      hostPath:
+        path: /var/run/docker.sock
+        type: Socket

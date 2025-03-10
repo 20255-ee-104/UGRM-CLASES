@@ -1,0 +1,47 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2019-11-28 12:59:41 +0000 (Thu, 28 Nov 2019)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn
+#  and optionally send me feedback to help improve or steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#            M u l t i - C l u s t e r   I n g r e s s   o n   G K E
+# ============================================================================ #
+
+# https://cloud.google.com/kubernetes-engine/docs/how-to/multi-cluster-ingress-setup
+
+# https://cloud.google.com/kubernetes-engine/docs/how-to/multi-cluster-ingress
+
+---
+apiVersion: networking.gke.io/v1
+kind: MultiClusterIngress
+metadata:
+  name: APP
+  namespace: NAMESPACE
+  annotations:
+    networking.gke.io/static-ip: static-ip-name
+spec:
+  backend:
+    serviceName: APP-mcs
+    servicePort: 80
+  rules:
+    # XXX: Edit
+    - host: APP.DOMAIN.COM
+      http:
+        paths:
+          # XXX: Edit
+          - path: /APP
+            backend:
+              serviceName: APP-mcs
+              servicePort: 80

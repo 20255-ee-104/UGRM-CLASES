@@ -1,0 +1,42 @@
+#!/bin/bash
+set -e
+set -u
+
+bin="./node_modules/.bin"
+
+function main {
+  clean
+  npm run build
+  uglify_js
+  cp app/index.html dist/
+  commit_and_push_to_gh
+}
+
+function clean {
+  rm -rf dist/* 2> /dev/null
+}
+
+function uglify_js {
+  echo "Uglify..."
+  cp dist/main.js dist/tmp.js
+  "$bin/uglifyjs" --compress --mangle -- dist/tmp.js > dist/main.js
+  rm dist/tmp.js
+}
+
+function commit_and_push_to_gh {
+  current_commit_hash=$(get_current_commit_hash)
+  current_branch_name=$(get_current_branch_name)
+
+  echo "deploying branch $current_branch_name at $current_commit_hash"
+  "$bin/gh-pages" --dist dist/
+}
+
+function get_current_commit_hash {
+  git rev-parse --short HEAD
+}
+
+function get_current_branch_name {
+  git name-rev --name-only HEAD
+}
+
+main

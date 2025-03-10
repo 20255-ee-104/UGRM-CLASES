@@ -1,0 +1,130 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2021-11-05 04:09:15 +0000 (Fri, 05 Nov 2021)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn
+#  and optionally send me feedback to help improve or steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                   G i t H u b   A c t i o n s   R u n n e r
+# ============================================================================ #
+
+# You can find the secret agent token on this page when you are logged in:
+#
+#   https://github.com/<USER>/<REPO>/settings/actions/runners/new?arch=x64&os=linux
+#
+#   https://github.com/organizations/<ORG>/settings/actions/runners/new?arch=x64&os=linux
+#
+# 2 agents can share the same token on this page and will be registered successfully
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: github-actions-runner
+  namespace: github-actions
+  labels:
+    app: github-actions-runner
+  annotations:
+    cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+spec:
+  paused: false
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  selector:
+    matchLabels:
+      app: github-actions-runner
+  template:
+    metadata:
+      labels:
+        app: github-actions-runner
+    spec:
+      affinity:
+        # avoid preemption which can cause build failures
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  # gke-preemptible not valid on GKE AutoPilot clusters - remove in that case and leave only gke-spot
+                  - key: cloud.google.com/gke-preemptible
+                    operator: DoesNotExist
+                  - key: cloud.google.com/gke-spot
+                    operator: DoesNotExist
+                  - key: eks.amazonaws.com/capacityType
+                    operator: NotIn
+                    values:
+                      - SPOT
+                  - key: kubernetes.azure.com/scalesetpriority
+                    operator: NotIn
+                    values:
+                      - spot
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: topology.kubernetes.io/zone
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - github-actions-runner
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - github-actions-runner
+      containers:
+        - name: github-actions-runner
+          #image: harisekhon/github-actions-runner:2.284
+          image: harisekhon/github-actions-runner:latest
+          #imagePullPolicy: Always
+          args:
+            - --url
+            - https://github.com/<REPO_OR_ORG>  # XXX: replace
+            - --token
+            # XXX: kubectl create secret generic -n github-actions github-actions-runner-token --from-literal=github-actions-runner-token=TOKEN
+            #        or
+            #      use a script like gcp_secrets_to_kubernetes.sh to load it from GCP Secret Manager (see https://github.com/HariSekhon/DevOps-Bash-tools)
+            - $(GITHUB_ACTIONS_RUNNER_TOKEN)
+            - --unattended
+            - --ephemeral
+          env:
+            - name: GITHUB_ACTIONS_RUNNER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: github-actions-runner-token
+                  key: github-actions-runner-token
+          # TODO: see if there is a better check that this, at least a port or preferably http /health check
+          readinessProbe:
+            exec:
+              command:
+                - pgrep -f run.sh
+          livenessProbe:
+            exec:
+              command:
+                - pgrep -f run.sh
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 4Gi

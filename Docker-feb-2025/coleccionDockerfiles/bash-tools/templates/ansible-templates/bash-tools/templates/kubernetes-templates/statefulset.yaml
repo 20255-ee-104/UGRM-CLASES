@@ -1,0 +1,346 @@
+#
+#  Author: Hari Sekhon
+#  Date: [% DATE  # 2019-11-28 18:51:59 +0000 (Thu, 28 Nov 2019) %]
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn
+#  and optionally send me feedback to help improve or steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                             S t a t e f u l S e t
+# ============================================================================ #
+
+# https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/
+#
+# https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/stateful-set-v1/
+#
+# see pod anti-affinity here:
+#
+# https://kubernetes.io/docs/tutorials/stateful-application/zookeeper/
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: NAME
+  namespace: NAMESPACE
+  annotations:
+    # see also k8s_pod_disruption_budget.yaml
+    # XXX: set to true if this can be evicted, otherwise this can prevent cluster autoscaler from scaling down the nodepool
+    cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+    # adds ArgoCD link symbol in the UI next to object
+    #link.argocd.argoproj.io/external-link: http://www.domain.com/path
+spec:
+  replicas: 3  # XXX: don't define replicas if using HPA, otherwise gets overridden and reset to this number every deploy which could cause load or data sharding issues
+  serviceName: NAME
+  selector:
+    matchLabels:
+      app: APP
+  template:
+    metadata:
+      labels:
+        app: APP
+    spec:
+      # for business critical workloads to get priority access to the stable node pool instead of preemptible node pool, will evict lower priority pods to preemptible node pool (default 0) if necessary. Requires: priorityclass.yaml
+      #
+      # priorityClassName: high-priority
+      #
+      #nodeSelector:
+        #myLabel: myFastNodes
+        #disktype: ssd
+        #kubernetes.io/arch: amd64
+        #kubernetes.io/os: linux
+        #node.kubernetes.io/instance-type: m3.medium    # 1.17+
+        ## for persistent disks limited to 2 zones combined with GKE regional clusters
+        #topology.kubernetes.io/zone: europe-west2-a  # 1.17+
+        #topology.kubernetes.io/region: europe-west2    # 1.17+
+        #
+        # GKE specific - hard requirement - prefer affinity below is safer soft requirement to still allow scheduling if node pool becomes unavailable (eg. recreated by Terraform)
+        #
+        # cloud.google.com/gke-nodepool: POOL_NAME
+        #
+        # GKE Autopilot
+        #
+        #   https://cloud.google.com/kubernetes-engine/docs/concepts/autopilot-compute-classes#when-to-use
+        #
+        # cloud.google.com/compute-class: Balanced
+        #
+      #
+      # https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#affinity-and-anti-affinity
+      # XXX: not recommended in clusters greater than several hundred nodes due to significant CPU overhead slowing down scheduling
+      affinity:
+        nodeAffinity:
+          # Node preemption:
+          # - shuts down pods ungracefully
+          # - ignores PodDisruptionBudget
+          # - invalidate Stateful guarantees and can lead to data loss !!
+          # https://cloud.google.com/kubernetes-engine/docs/how-to/preemptible-vms#kubernetes_constraint_violations
+          # https://cloud.google.com/kubernetes-engine/docs/how-to/preemptible-vms#best_practices
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  # GCP: https://cloud.google.com/kubernetes-engine/docs/how-to/preemptible-vms#best_practices
+                  #
+                  # gke-preemptible not valid on GKE AutoPilot clusters - remove in that case and leave only gke-spot
+                  - key: cloud.google.com/gke-preemptible
+                    operator: DoesNotExist
+                  - key: cloud.google.com/gke-spot
+                    operator: DoesNotExist
+                  #
+                  # AWS: https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html
+                  - key: eks.amazonaws.com/capacityType
+                    operator: NotIn
+                    values:
+                      - SPOT
+                  #
+                  # Azure: https://docs.microsoft.com/en-us/azure/aks/spot-node-pool
+                  - key: kubernetes.azure.com/scalesetpriority
+                    operator: NotIn
+                    values:
+                      - spot
+        #podAffinity:
+        podAntiAffinity:
+          # XXX: spread app across AZs
+          # XXX: use preferred if num_replicas > num_AZs
+#          preferredDuringSchedulingIgnoredDuringExecution:
+#            - weight: 100
+#              podAffinityTerm:
+#                topologyKey: topology.kubernetes.io/zone
+#                labelSelector:
+#                  matchExpressions:
+#                    - key: app
+#                      operator: In
+#                      values:
+#                        - APP
+          requiredDuringSchedulingIgnoredDuringExecution:
+            # XXX: spread app across AZs
+            - topologyKey: topology.kubernetes.io/zone
+              labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - APP
+            # XXX: spread app across hosts (default prefers spread, whereas this requires it)
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - APP
+      #serviceAccountName: NAME
+      securityContext:
+        # see pod-security-policy.yaml for wider enforcement
+        runAsNonRoot: true
+        #runAsUser: 0   # not recommended
+        fsGroup: 1000   # group to own volumeMounts so they can be written to by the user-level process
+        # XXX: don't chgrp all the many small files unless the root mismatches, prevents long outages on pod creation hanging with multiple of these error messages:
+        #
+        #   Unable to attach or mount volumes: unmounted volumes=[jenkins-home], unattached volumes=[kube-api-access-6q2kb jenkins-home]: timed out waiting for the condition
+        #
+        #   https://docs.cloudbees.com/docs/cloudbees-ci-kb/latest/cloudbees-ci-on-modern-cloud-platforms/timeout-when-attaching-volumes-in-kubernetes
+        #
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: NAME
+          image: postgres:9.6
+          ports:
+            - name: postgres
+              containerPort: 5432
+              protocol: TCP
+          securityContext:
+            runAsNonRoot: true
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: HEAP_SIZE
+              value: 1G
+            - name: CASSANDRA_SEEDS
+              value: cassandra-0.cassandra.svc.cluster.local,cassandra-1.cassandra.svc.cluster.local,cassandra-2.cassandra.svc.cluster.local
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP  # K8S API path
+            - name: CLOUD_SQL_INSTANCE
+              valueFrom:
+                configMapKeyRef:
+                  key: cloud-sql-instance
+                  name: my-configmap
+            - name: MYSECRET
+              valueFrom:
+                secretKeyRef:
+                  name: my-secret
+                  key: my-secret
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          #
+          # Probe fields:
+          #
+          #   https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/#configure-probes
+          #
+          # newer versions of Kubernetes
+          # use this for slow starting applications without compromising the responsiveness of readiness or liveness probes which do not start until after this
+          #startupProbe:
+          #  # http, tcp or exec
+          #  #httpGet:
+          #  #  path: /healthz
+          #  #  port: 8080  # or 'http' to use name from ports section
+          #  #  scheme: HTTPS
+          #  #  #httpHeaders:
+          #  #  #  - name: Custom-Header
+          #  #  #    value: Awesome
+          #  # only uncomment if you can't use http check, must comment/delete http check otherwise will get this error:
+          #  # invalid: spec.containers[0].livenessProbe.tcpSocket: Forbidden: may not specify more than 1 handler type
+          #  tcpSocket:
+          #    port: 5432
+          #  #grpc:  # Kubernetes 1.27+
+          #  #  port: 2379  # must be number, not port name or fqdn
+          #  #  #service: readiness  # to use same grpc port to distinguish between checks
+          #  initialDelaySeconds: 0 # default
+          #  initialDelaySeconds: 0 # default
+          #  successThreshold: 1    # default
+          #  failureThreshold: 3    # default
+          #  periodSeconds: 10      # default (interval)
+          #  timeoutSeconds: 1      # default
+          readinessProbe:
+            # http, tcp or exec
+            #httpGet:
+            #  path: /healthz
+            #  port: 8080  # or 'http' to use name from ports section
+            #  scheme: HTTPS
+            #  #httpHeaders:
+            #  #  - name: Custom-Header
+            #  #    value: Awesome
+            # only uncomment if you can't use http check, must comment/delete http check otherwise will get this error:
+            # invalid: spec.containers[0].livenessProbe.tcpSocket: Forbidden: may not specify more than 1 handler type
+            tcpSocket:
+              port: 5432
+            #grpc:  # Kubernetes 1.27+
+            #  port: 2379  # must be number, not port name or fqdn
+            #  #service: readiness  # to use same grpc port to distinguish between checks
+            initialDelaySeconds: 0 # default
+            successThreshold: 1    # default
+            failureThreshold: 3    # default
+            periodSeconds: 10      # default (interval)
+            timeoutSeconds: 1      # default
+          livenessProbe:
+            #httpGet:
+            #  path: /healthz
+            #  port: 8080  # or 'http' to use name from ports section
+            #  #scheme: HTTPS
+            #  #httpHeaders:
+            #  #  - name: Custom-Header
+            #  #    value: Awesome
+            tcpSocket:
+              port: 5432
+            #grpc:  # Kubernetes 1.27+
+            #  port: 2379  # must be number, not port name or fqdn
+            #  #service: readiness  # to use same grpc port to distinguish between checks
+            initialDelaySeconds: 0 # default
+            successThreshold: 1    # default
+            failureThreshold: 3    # default
+            periodSeconds: 10      # default (interval)
+            timeoutSeconds: 1      # default
+          volumeMounts:
+            - name: pgdata
+              mountPath: /var/lib/pgsql
+            - name: env
+              mountPath: /app/.env
+              subPath: .env
+          #lifecycle:
+          #  postStart:
+          #    exec:
+          #      command: ["/bin/sh", "-c", "echo Hello from the postStart handler > /usr/share/message"]
+          #  preStop:
+          #    exec:
+          #      # recent nginx-ingress already has this, but still a decent example to gracefully finish connections on your own nginx via SIGQUIT not SIGTERM
+          #      # also remember to increase terminationGracePeriodSeconds
+          #      command: ["/bin/sh","-c","nginx -s quit; while killall -0 nginx; do sleep 1; done"]
+
+        #
+        # GCP Cloud SQL Proxy sidecar - app can then connect to DB at localhost
+        #
+        #   https://cloud.google.com/sql/docs/postgres/connect-kubernetes-engine
+        #
+        # Set up Workload Identity integration between k8s SA + GCP SA
+        #
+        #   https://cloud.google.com/sql/docs/postgres/connect-kubernetes-engine#workload-identity
+        #
+        - name: cloud-sql-proxy
+          image: gcr.io/cloudsql-docker/gce-proxy:1.17
+          command:
+            - /cloud_sql_proxy
+            - "-ip_address_types=PRIVATE"
+            - "-instances=$(CLOUD_SQL_INSTANCE)=tcp:5432"  # populate CLOUD_SQL_INSTANCE env var via configmap, must also specify a port (eg. 5432 for PostgreSQL or 3306 for MySQL, or else a -dir option if using socket dir)
+          securityContext:
+            # The default Cloud SQL proxy image runs as the
+            # "nonroot" user and group (uid: 65532) by default.
+            runAsNonRoot: true
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128mi
+            limits:
+              cpu: "1"
+              memory: 2gi
+          readinessProbe:
+            tcpSocket:
+              #port: 3306  # mysql
+              port: 5432   # postgres
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              #port: 3306  # mysql
+              port: 5432   # postgres
+            failureThreshold: 10
+      volumes:
+        - name: env
+          configMap:
+            name: myconfigmap
+            defaultMode: 0400
+            items:
+              - key: .env
+                path: .env
+  volumeClaimTemplates:
+    - metadata:
+        name: pgdata
+      spec:
+        # XXX: use a storageclass-*.yaml to:
+        #      - set a "reclaimPolicy: Retain" for safety to avoid data loss if deleting/recreating the namespace with the pvc
+        #        (it still requires a manual recovery for this easy mistake to make but at least the data isn't deleted)
+        #      - choose disk type (SSD vs spinning disk)
+        #      - make disk dynamically resizeable (eg. on GCP)
+        #storageClassName: ssd
+        #storageClassName: ssd-resizeable
+        #storageClassName: standard-resizeable
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            # resize here doesn't affect the PVC, must edit the PVC directly to trigger the provider resize, didn't even need a pod cycle in GCP testing
+            storage: 10Gi

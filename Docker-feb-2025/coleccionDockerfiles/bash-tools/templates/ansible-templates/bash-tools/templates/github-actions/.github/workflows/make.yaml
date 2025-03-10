@@ -1,0 +1,341 @@
+#
+#  Author: Hari Sekhon
+#  Date: Tue Feb 4 09:53:28 2020 +0000
+#
+#  vim:ts=2:sts=2:sw=2:et
+#
+#  https://github.com/HariSekhon/GitHub-Actions
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+---
+name: Make
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: The base OS to run on. Must be ubuntu if specifying container
+        type: string
+        default: ubuntu-latest
+        required: false
+      container:
+        description: The docker image:version container to build inside
+        type: string
+        default: null
+        required: false
+      build-targets:
+        description: The Make build targets, space separated
+        type: string
+        required: false
+        default: ''
+      no-test:
+        description: Don't run 'make test' after build
+        type: boolean
+        required: false
+        default: false
+      python-version:
+        description: Set up a specific Python version
+        type: string
+        required: false
+      caches:
+        description: Caches eg. pip, cpan, maven, sbt, gradle etc...
+        type: string
+        required: false
+      debug:
+        type: string
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    # not bash because we could be passed an Alpine container
+    shell: sh -eux {0}
+
+env:
+  BUILD_TARGETS: ${{ inputs.build-targets }}
+  DEBIAN_FRONTEND: noninteractive
+  DEBUG: ${{ inputs.debug == true || github.event.inputs.debug == 'true' || '' }}
+
+jobs:
+  make:
+    name: Make
+    runs-on: ${{ inputs.runs-on }}
+    container: ${{ inputs.container }}
+    steps:
+      - name: Environment
+        run: env | sort
+
+      - name: Apk Cache
+        if: ( contains(inputs.caches, 'apk') || contains(inputs.caches, 'alpine') ) && startsWith(runner.os, 'Linux')
+        uses: actions/cache@v2
+        with:
+          path: /var/cache/apk
+          key: apk-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('/etc/*release') }}
+          restore-keys: |
+            apk-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('/etc/*release') }}
+
+      - name: Apt Cache
+        # could specify '! inputs.container ||' , which would infer we are still on ubuntu-latest and enable apt cache, but better to give calling workflow the option of enabling/disabling cache via input instead
+        if: ( contains(inputs.caches, 'apt') || contains(inputs.caches, 'debian') || contains(inputs.caches, 'ubuntu') ) && startsWith(runner.os, 'Linux')
+        uses: actions/cache@v2
+        with:
+          path: /var/cache/apt
+          key: apt-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('/etc/*release') }}
+          restore-keys: |
+            apt-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('/etc/*release') }}
+
+      - name: Brew Cache
+        if: ( contains(inputs.caches, 'brew') || contains(inputs.caches, 'mac') || contains(inputs.caches, 'macos') ) && startsWith(runner.os, 'macOS')
+        uses: actions/cache@v2
+        with:
+          path: ~/Library/Caches/Homebrew/
+          key: brew-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles(' /System/Library/CoreServices/SystemVersion.plist') }}
+          restore-keys: |
+            brew-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles(' /System/Library/CoreServices/SystemVersion.plist') }}
+
+      - name: Yum Cache
+        if: ( contains(inputs.caches, 'yum') || contains(inputs.caches, 'centos') || contains(inputs.caches, 'rhel') ) && startsWith(runner.os, 'Linux')
+        uses: actions/cache@v2
+        with:
+          path: /var/cache/yum
+          key: yum-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('/etc/*release') }}
+          restore-keys: |
+            yum-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('/etc/*release') }}
+
+      - name: Install Bash, Git & Make
+        run: |
+          sudo=sudo
+          if [ "${EUID:-${UID:-$(id -u)}}" = 0 ]; then
+            sudo=''
+          fi
+          if command -v apk; then
+            # apk add --no-cache isn't available until Alpine 3
+            #$sudo apk add --no-cache git make
+            $sudo apk update
+            $sudo apk add bash git make
+          elif command -v apt-get; then
+            if grep -Fxq 'ID=debian' /etc/*release &&
+               grep -xq 'VERSION_ID="[67]"' /etc/*release; then
+              # switch APT sources to archive.debian.org
+              $sudo sed -i 's/deb.debian.org/archive.debian.org/' /etc/apt/sources.list
+              $sudo sed -i 's/security.debian.org/archive.debian.org/' /etc/apt/sources.list
+            fi
+            $sudo apt-get update
+            $sudo apt-get install -y -q bash git make
+          #elif command -v dnf; then
+          #  $sudo dnf install -y -q bash git make
+          elif command -v yum; then
+            # CentOS is EOL - but for some reason CentOS 7 works without this, while CentOS 6 and 8 need archive
+            if grep -qi 'NAME=.*CentOS' /etc/*release && grep -q '^VERSION="[68]"$' /etc/*release; then
+              $sudo sed -i 's/^[[:space:]]*mirrorlist/#mirrorlist/' /etc/yum.repos.d/CentOS-*
+              $sudo sed -i 's|^#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|' /etc/yum.repos.d/CentOS-*
+            fi
+            $sudo yum install -y -q bash git make
+          fi
+
+      - name: Brew Update
+        if: startsWith(runner.os, 'macOS')
+        run: which brew && brew update || echo
+
+      - name: Git version
+        run: git --version
+
+      - name: Git Checkout
+        # git version too old to support recursive submodules checkout on older version Debian and Ubuntu <= 18
+        #uses: actions/checkout@v3
+        #with:
+        #  submodules: recursive  # requires Git 2.18+ to be installed first
+        env:
+          TOKEN: ${{github.token}}
+        run: git clone "https://$TOKEN@github.com/$GITHUB_REPOSITORY" "$GITHUB_WORKSPACE"
+
+      - uses: actions/setup-python@v1
+        if: inputs.python-version
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      # ============================================================================ #
+      # Python Caches
+      #
+      - name: Python Pip Cache Linux
+        # could specify 'inputs.python-version', but better to give calling workflow the option of enabling/disabling cache via input instead
+        if: ( contains(inputs.caches, 'pip') || contains(inputs.caches, 'python') ) && startsWith(runner.os, 'Linux')
+        uses: actions/cache@v2
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            pip-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Python Pip Cache Mac
+        if: ( contains(inputs.caches, 'pip') || contains(inputs.caches, 'python') ) && startsWith(runner.os, 'macOS')
+        uses: actions/cache@v2
+        with:
+          path: ~/Library/Caches/pip
+          key: pip-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            pip-${{ runner.os }}-${{ runner.arch }}-
+
+      # ============================================================================ #
+      # Perl Caches
+      #
+      - name: Perl CPAN Cache
+        if: contains(inputs.caches, 'perl') || contains(inputs.caches, 'cpan')
+        uses: actions/cache@v2
+        with:
+          path: ~/.cpan
+          key: cpan-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/cpan-requirements.txt') }}
+          restore-keys: |
+            cpan-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Perl CPANM Cache
+        if: contains(inputs.caches, 'perl') || contains(inputs.caches, 'cpan') || contains(inputs.caches, 'cpanm')
+        uses: actions/cache@v2
+        with:
+          path: ~/.cpanm
+          key: cpanm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/cpan-requirements.txt') }}
+          restore-keys: |
+            cpanm-${{ runner.os }}-${{ runner.arch }}-
+
+      # ============================================================================ #
+      # Ruby Gem Cache
+
+      - name: Ruby Gem Cache
+        if: contains(inputs.caches, 'ruby') || contains(inputs.caches, 'gem')
+        uses: actions/cache@v2
+        with:
+          path: ~/.gem
+          key: gem-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/Gemfile') }}
+          restore-keys: |
+            gem-${{ runner.os }}-${{ runner.arch }}-
+
+      # ============================================================================ #
+      # Go Cache
+
+      - name: Golang Pkg Cache
+        if: contains(inputs.caches, 'golang')
+        uses: actions/cache@v2
+        with:
+          path: ~/go/pkg/mod
+          key: golang-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            golang-${{ runner.os }}-${{ runner.arch }}-
+
+      # ============================================================================ #
+      # NodeJS Cache
+
+      - name: NodeJS Modules Cache
+        if: contains(inputs.caches, 'nodejs')
+        uses: actions/cache@v2
+        with:
+          path: node_modules
+          key: nodejs-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/package.json') }}
+          restore-keys: |
+            nodejs-${{ runner.os }}-${{ runner.arch }}-
+
+      # ============================================================================ #
+      # Java Caches
+
+      - name: Maven Cache
+        if: contains(inputs.caches, 'maven')
+        uses: actions/cache@v2
+        with:
+          path: ~/.m2/repository
+          key: maven-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            maven-cache-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Maven Wrapper
+        if: contains(inputs.caches, 'maven')
+        uses: actions/cache@v2
+        with:
+          path: ~/.m2/wrapper
+          key: maven-wrapper-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            maven-wrapper-${{ runner.os }}-${{ runner.arch }}-
+
+      # ============================================================================ #
+      - name: Gradle Cache
+        if: contains(inputs.caches, 'gradle')
+        uses: actions/cache@v2
+        with:
+          path: ~/.gradle/caches
+          key: gradle-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/build.gradle') }}
+          restore-keys: |
+            gradle-cache-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Gradle Wrapper
+        if: contains(inputs.caches, 'gradle')
+        uses: actions/cache@v2
+        with:
+          path: ~/.gradle/wrapper
+          key: gradle-wrapper-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/build.gradle') }}
+          restore-keys: |
+            gradle-wrapper-${{ runner.os }}-${{ runner.arch }}-
+
+      # ============================================================================ #
+      - name: SBT Cache
+        if: contains(inputs.caches, 'sbt')
+        uses: actions/cache@v2
+        with:
+          path: ~/.sbt
+          key: sbt-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/build.sbt') }}
+          restore-keys: |
+            sbt-cache-${{ runner.os }}-${{ runner.arch }}
+
+      - name: SBT Ivy Cache
+        if: contains(inputs.caches, 'sbt')
+        uses: actions/cache@v2
+        with:
+          path: ~/.ivy2/cache
+          key: sbt-ivy-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/build.sbt') }}
+          restore-keys: |
+            sbt-ivy-cache-${{ runner.os }}-${{ runner.arch }}
+
+      # ============================================================================ #
+      - name: Groovy Cache
+        if: contains(inputs.caches, 'groovy')
+        uses: actions/cache@v2
+        with:
+          path: ~/.groovy
+          key: groovy-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.groovy') }}
+          restore-keys: |
+            groovy-cache-${{ runner.os }}-${{ runner.arch }}
+
+      # ============================================================================
+
+      - name: Allow Git Commands
+        run: git config --global --add safe.directory "$PWD"
+
+      - name: Init
+        run: |
+          if grep -q '^init:' Makefile; then
+            make init
+          fi
+
+      - name: Build
+        run: |
+          if [ -n "${BUILD_TARGETS:-}" ]; then
+             # intentionally not quoting to permit splitting to individual targets
+             make $BUILD_TARGETS
+          elif grep -q '^ci:' Makefile; then
+            make ci
+          elif grep -q '^build:' Makefile; then
+            make build
+          else
+            make
+          fi
+
+      - name: Test
+        if: inputs.no-test != true && github.event.inputs.no-test != true
+        run: |
+          if grep -q '^test:' Makefile; then
+            make test
+          fi

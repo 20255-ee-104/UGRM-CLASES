@@ -1,0 +1,883 @@
+#!/usr/bin/env d2 --theme 200
+#                             myfilename.d2 forceformat.png -h # trick to eat arg
+#
+#  vim:ts=2:sts=2:sw=2:et:filetype=d2
+#
+#  Author: Hari Sekhon
+#  Date: [% DATE  # 2023-05-02 23:44:42 +0100 (Tue, 02 May 2023) %]
+#
+#  [% URL %]
+#
+#  [% LICENSE %]
+#
+#  [% MESSAGE %]
+#
+#  [% LINKEDIN %]
+#
+
+# ============================================================================ #
+#                    D2 Declarative Diagram Language Template
+# ============================================================================ #
+
+# direction: right
+
+# this is just a regular object
+title: {
+  label: Normal deployment
+  near: top-center
+  shape: text
+  style.font-size: 40
+  style.underline: true
+}
+
+# ======================================
+# Icons
+#
+# - icon: https://icons.terrastruct.com/infra/019-network.svg
+# - icon: ./images/f5.png
+# - shape: image  # make each object only the icon with no surrounding box
+#
+#       https://icons.terrastruct.com/
+#
+#       https://diagrams.mingrammer.com/docs/nodes/onprem
+#
+#       https://landscape.cncf.io/card-mode
+#
+#       https://www.flaticon.com/
+#
+#       https://simpleicons.org/
+
+# use this to define icons and style for objects of the same time to DRY the code out
+classes: {
+  # name: {
+  #  label: Display Name
+  #  icon: images/d2_graphic.png
+  #  shape: image
+  #  style.3d: true
+  #  style.animated: true
+  #  style.underline: true
+  #  style.opacity: 0.5  # 0 - 1  # 0 is invisible, less than 1 is translucent
+  #  style.stroke-dash: 5  # 0 - 10
+  # }
+  python: {
+    label: Python
+    icon: https://icons.terrastruct.com/dev%2Fpython.svg
+    shape: image
+  }
+  d2: {
+    label: D2
+    icon: images/d2_graphic.png
+    shape: image
+  }
+  go: {
+    label: Golang
+    icon: https://icons.terrastruct.com/dev%2Fgo.svg
+    shape: image
+  }
+  gradle: {
+    label: Gradle
+    icon: https://icons.terrastruct.com/dev%2Fgradle.svg
+    shape: image
+  }
+  groovy: {
+    label: Groovy
+    icon: https://icons.terrastruct.com/dev%2Fgroovy.svg
+    shape: image
+  }
+  javascript: {
+    label: Javascript
+    icon: https://icons.terrastruct.com/dev%2Fjavascript.svg
+    shape: image
+  }
+  nodejs: {
+    label: NodeJS
+    icon: https://icons.terrastruct.com/dev%2Fnodejs.svg
+    shape: image
+  }
+  ruby: {
+    label: Ruby
+    icon: https://icons.terrastruct.com/dev%2Fruby.svg
+    shape: image
+  }
+  rust: {
+    label: Rust
+    icon: https://icons.terrastruct.com/dev%2Frust.svg
+    shape: image
+  }
+  scala: {
+    label: Scala
+    icon: https://icons.terrastruct.com/dev%2Fscala.svg
+    shape: image
+  }
+  slack: {
+    label: Slack
+    icon: https://icons.terrastruct.com/dev%2Fslack.svg
+    shape: image
+  }
+  git: {
+    label: Git
+    icon: https://icons.terrastruct.com/dev%2Fgit.svg
+    shape: image
+  }
+  github: {
+    label: GitHub
+    icon: https://icons.terrastruct.com/dev%2Fgithub.svg
+    # icon: https://icons.terrastruct.com/social%2F039-github.svg
+    shape: image
+  }
+  terraform: {
+    label: Terraform
+    icon: https://diagrams.mingrammer.com/img/resources/onprem/iac/terraform.png
+    shape: image
+  }
+  packer: {
+    label: Packer
+    icon: https://raw.githubusercontent.com/hashicorp/packer/main/website/public/img/logo-packer-padded.svg
+    shape: image
+  }
+  cicd: {
+    label: CI/CD
+    icon: https://diagrams.mingrammer.com/img/resources/onprem/ci/github-actions.png
+    shape: image
+  }
+  actions: {
+    label: GitHub Actions
+    icon: https://diagrams.mingrammer.com/img/resources/onprem/ci/github-actions.png
+    shape: image
+  }
+  jenkins: {
+    label: Jenkins
+    icon: https://diagrams.mingrammer.com/img/resources/onprem/ci/jenkins.png
+    shape: image
+  }
+  docker: {
+    label: Docker
+    # icon: https://diagrams.mingrammer.com/img/resources/onprem/container/docker.png
+    icon: https://icons.terrastruct.com/dev%2Fdocker.svg
+    shape: image
+  }
+  harbor: {
+    label: Harbor
+    icon: https://diagrams.mingrammer.com/img/resources/onprem/registry/harbor.png
+    shape: image
+  }
+  jfrog: {
+    label: JFrog
+    icon: https://diagrams.mingrammer.com/img/resources/onprem/registry/jfrog.png
+    shape: image
+  }
+  postgres: {
+    label: PostgreSQL
+    icon: https://icons.terrastruct.com/dev%2Fpostgresql.svg
+    # icon: https://diagrams.mingrammer.com/img/resources/onprem/database/postgresql.png
+    shape: image
+  }
+  mysql: {
+    label: MySQL
+    icon: https://icons.terrastruct.com/dev%2Fmysql.svg
+    # icon: https://diagrams.mingrammer.com/img/resources/onprem/database/mysql.png
+    shape: image
+  }
+  mariadb: {
+    label: MariaDB
+    icon: https://diagrams.mingrammer.com/img/resources/onprem/database/mariadb.png
+    shape: image
+  }
+  cassandra: {
+    label: Cassandra
+    icon: https://diagrams.mingrammer.com/img/resources/onprem/database/cassandra.png
+    shape: image
+  }
+  neo4j: {
+    label: Neo4J
+    icon: https://diagrams.mingrammer.com/img/resources/onprem/database/neo4j.png
+    shape: image
+  }
+  redis: {
+    label: Redis
+    icon: https://icons.terrastruct.com/dev%2Fredis.svg
+    # icon: https://diagrams.mingrammer.com/img/resources/onprem/inmemory/redis.png
+    shape: image
+  }
+  load_balancer: {
+    label: Load Balancer
+    icon: https://icons.terrastruct.com/gcp%2FProducts%20and%20services%2FNetworking%2FCloud%20Load%20Balancing.svg
+    # icon: https://icons.terrastruct.com/aws%2FNetworking%20&%20Content%20Delivery%2FElastic-Load-Balancing.svg
+    # icon: https://icons.terrastruct.com/azure%2FNetworking%20Service%20Color%2FLoad%20Balancers.svg
+    shape: image
+  }
+  k8s: {
+    label: Kubernetes
+    icon: https://icons.terrastruct.com/azure%2F_Companies%2FKubernetes.svg
+    shape: image
+  }
+  k3s: {
+    label: K3s
+    icon: https://diagrams.mingrammer.com/img/resources/onprem/container/k3s.png
+    shape: image
+  }
+  rancher: {
+    label: Rancher
+    # great selection of icons here
+    # https://www.rancher.com/brand-guidelines
+    # blue cow on white background
+    icon: https://www.rancher.com/assets/img/logos/rancher-suse-logo-stacked-color.svg
+    # white cow on blue background
+    # icon: https://www.rancher.com/assets/img/logos/rancher-suse-logo-stacked-white.svg
+    # blue cow on white background no label
+    i
+    # icon: https://www.rancher.com/assets/img/logos/rancher-logo-cow-blue.svg
+    # white cow on blue background no label
+    # icon: https://www.rancher.com/assets/img/logos/rancher-logo-cow-white.svg
+    shape: image
+  }
+  argocd: {
+    label: ArgoCD
+    icon: https://diagrams.mingrammer.com/img/resources/onprem/gitops/argocd.png
+    shape: image
+  }
+  ingress: {
+    label: Kubernetes Ingress
+    icon: https://diagrams.mingrammer.com/img/resources/k8s/network/ing.png
+    shape: image
+  }
+  service: {
+    label: Kubernetes Service
+    icon: https://diagrams.mingrammer.com/img/resources/k8s/network/svc.png
+    shape: image
+  }
+  pod: {
+    label: Kubernetes Pod
+    icon: https://diagrams.mingrammer.com/img/resources/k8s/compute/pod.png
+    shape: image
+  }
+  kustomize: {
+    label: Kustomize
+    icon: https://diagrams.mingrammer.com/img/resources/k8s/ecosystem/kustomize.png
+    shape: image
+  }
+  helm: {
+    label: Helm
+    icon: https://diagrams.mingrammer.com/img/resources/k8s/ecosystem/helm.png
+    shape: image
+  }
+  externaldns: {
+    label: External DNS
+    icon: https://diagrams.mingrammer.com/img/resources/k8s/ecosystem/external-dns.png
+    shape: image
+  }
+  dns: {
+    label: DNS
+    icon: https://icons.terrastruct.com/gcp%2FProducts%20and%20services%2FNetworking%2FCloud%20DNS.svg
+    # icon: https://diagrams.mingrammer.com/img/resources/gcp/network/dns.png
+    # icon: https://icons.terrastruct.com/azure%2FNetworking%20Service%20Color%2FDNS%20Zones.svg
+    # icon: https://icons.terrastruct.com/aws%2FNetworking%20&%20Content%20Delivery%2FAmazon-Route-53.svg
+    # icon: https://diagrams.mingrammer.com/img/resources/azure/network/dns-zones.png
+    shape: image
+  }
+  users: {
+    label: Users
+    icon: https://icons.terrastruct.com/essentials%2F359-users.svg
+    # icon: https://diagrams.mingrammer.com/img/resources/onprem/client/users.png
+    shape: image
+  }
+  apps: {
+    label: Apps
+    icon: https://icons.terrastruct.com/azure%2FIntune%20Service%20Color%2FClient%20Apps.svg
+    shape: image
+  }
+  nginx: {
+    label: Nginx
+    # icon: https://icons.terrastruct.com/dev%2Fnginx.svg
+    icon: https://diagrams.mingrammer.com/img/resources/onprem/network/nginx.png
+    shape: image
+  }
+  traefik: {
+    label: Traefik
+    icon: https://diagrams.mingrammer.com/img/resources/onprem/network/traefik.png
+    shape: image
+  }
+  aws: {
+    label: AWS
+    icon: https://icons.terrastruct.com/dev%2Famazonwebservices.svg
+    # icon: https://icons.terrastruct.com/aws%2F_Group%20Icons%2FAWS-Cloud-alt_light-bg.svg
+    shape: image
+  }
+  eks: {
+    label: EKS
+    icon: https://diagrams.mingrammer.com/img/resources/aws/compute/elastic-kubernetes-service.png
+    shape: image
+  }
+  ecr: {
+    label: AWS Elastic Container Registry
+    # square corners
+    # icon: https://icons.terrastruct.com/aws%2FCompute%2FAmazon-EC2-Container-Registry.svg
+    # round corners
+    icon: https://diagrams.mingrammer.com/img/resources/aws/compute/ec2-container-registry.png
+    shape: image
+  }
+  aws_secret: {
+    label: AWS Secrets Manager
+    icon: https://icons.terrastruct.com/aws%2FSecurity%2C%20Identity%2C%20&%20Compliance%2FAWS-Secrets-Manager.svg
+    shape: image
+  }
+  gcp: {
+    label: GCP
+    icon: https://cdn-icons-png.flaticon.com/512/873/873117.png
+    # icon: https://lirp.cdn-website.com/aa0ef369/dms3rep/multi/opt/google-cloud-icon-400w.png
+    shape: image
+  }
+  gke: {
+    label: GKE
+    # icon: https://icons.terrastruct.com/gcp%2FProducts%20and%20services%2FCompute%2FKubetnetes%20Engine.svg
+    # nicer: 3d, more distinguished from rest of d2 gcp icon set
+    icon: https://diagrams.mingrammer.com/img/resources/gcp/compute/kubernetes-engine.png
+    shape: image
+  }
+  gcr: {
+    label: GCR
+    # dark filled
+    icon: https://icons.terrastruct.com/gcp%2FProducts%20and%20services%2FDeveloper%20Tools%2FContainer%20Registry.svg
+    # light filled
+    # icon: https://diagrams.mingrammer.com/img/resources/gcp/devtools/container-registry.png
+    shape: image
+  }
+  gcp_secret: {
+    label: GCP Secret Manager
+    icon: https://miro.medium.com/v2/resize:fit:1024/0*eT9wK2hiaOnGLGI9
+    # icon: https://images.ctfassets.net/bsbv786nih7n/1kvnUY0O45mFdDkUT0Pow6/0ecd32acbebe8056f88c3dc0a90fb9eb/1_tQKERQdZsjUArxXjaHo9PA.png
+    shape: image
+  }
+  azure: {
+    label: Azure
+    icon: https://cdn-icons-png.flaticon.com/512/873/873107.png
+    icon: https://www.smartdesc.co.uk/wp-content/uploads/2022/10/Azure-Square-3.png
+    shape: image
+  }
+  azuread: {
+    label: Azure Active Directory
+    icon: https://icons.terrastruct.com/azure%2FIdentity%20Service%20Color%2FActive%20Directory.svg
+    # icon: https://diagrams.mingrammer.com/img/resources/azure/identity/active-directory.png
+    shape: image
+  }
+  keycloak: {
+    label: Keycloak
+    icon: https://www.keycloak.org/resources/images/keycloak_icon_512px.svg
+    shape: image
+  }
+  commandline: {
+    label: Command Line
+    icon: https://icons.terrastruct.com/aws%2FDeveloper%20Tools%2FAWS-Command-Line-Interface.svg
+    shape: image
+  }
+  apache: {
+    label: Apache Httpd
+    icon: https://www.svgrepo.com/show/353400/apache.svg
+    # icon: https://icons.terrastruct.com/dev%2Fapache.svg
+    # icon: https://diagrams.mingrammer.com/img/resources/onprem/network/apache.png
+    shape: image
+  }
+  tomcat: {
+    label: Tomcat
+    icon: https://icons.terrastruct.com/dev%2Ftomcat.svg
+    shape: image
+  }
+  thanos: {
+    label: Thanos
+    icon: https://diagrams.mingrammer.com/img/resources/onprem/monitoring/thanos.png
+    shape: image
+  }
+  prometheus: {
+    label: Prometheus
+    icon: https://diagrams.mingrammer.com/img/resources/onprem/monitoring/prometheus.png
+    shape: image
+  }
+  exporter: {
+    label: Prometheus\nExporters
+    icon: https://diagrams.mingrammer.com/img/resources/onprem/monitoring/prometheus.png
+    shape: image
+  }
+  alertmanager: {
+    label: Prometheus\nAlertManager
+    icon: https://diagrams.mingrammer.com/img/resources/onprem/monitoring/prometheus.png
+    shape: image
+  }
+  pagerduty: {
+    label: Pagerduty
+    icon: https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/pagerduty.svg
+    shape: image
+  }
+  grafana: {
+    label: Grafana
+    icon: https://diagrams.mingrammer.com/img/resources/onprem/monitoring/grafana.png
+    shape: image
+  }
+  opentsdb: {
+    label: OpenTSDB
+    icon: ./images/opentsdb.png
+    shape: image
+  }
+  hbase: {
+    label: Apache HBase
+    # icon: https://hbase.apache.org/images/hbase_logo_with_orca.png
+    # icon: https://hbase.apache.org/images/hbase_logo_with_orca_large.png
+    # icon: https://hbase.apache.org/images/jumping-orca_rotated.png
+    icon: https://diagrams.mingrammer.com/img/resources/onprem/database/hbase.png
+    shape: image
+  }
+  hadoop: {
+    label: Apache Hadoop
+    icon: https://diagrams.mingrammer.com/img/resources/onprem/analytics/hadoop.png
+    shape: image
+  }
+  kafka: {
+    label: Kafka
+    icon: https://diagrams.mingrammer.com/img/resources/onprem/queue/kafka.png
+    shape: image
+  }
+  zookeeper: {
+    label: Zookeeper
+    icon: https://diagrams.mingrammer.com/img/resources/onprem/network/zookeeper.png
+    shape: image
+  }
+  elasticsearch: {
+    icon: https://diagrams.mingrammer.com/img/resources/elastic/saas/elastic.png
+    shape: image
+  }
+  kibana: {
+    label: Kibana
+    icon: https://diagrams.mingrammer.com/img/resources/elastic/elasticsearch/kibana.png
+    shape: image
+  }
+  linux: {
+    label: Linux
+    icon: https://icons.terrastruct.com/dev%2Flinux.svg
+    # icon: https://diagrams.mingrammer.com/img/resources/generic/os/linux-general.png
+    shape: image
+  }
+  mac: {
+    label: Mac
+    icon: https://icons.terrastruct.com/dev%2Fapple.svg
+    # icon: https://diagrams.mingrammer.com/img/resources/generic/os/ios.png
+    shape: image
+  }
+  debian: {
+    label: Debian
+    icon: https://diagrams.mingrammer.com/img/resources/generic/os/debian.png
+    shape: image
+  }
+  redhat: {
+    label: Redhat
+    icon: https://icons.terrastruct.com/dev%2Fredhat.svg
+    # icon: https://diagrams.mingrammer.com/img/resources/generic/os/red-hat.png
+    shape: image
+  }
+  suse: {
+    label: Suse
+    icon: https://diagrams.mingrammer.com/img/resources/generic/os/suse.png
+    shape: image
+  }
+  ubuntu: {
+    label: Ubuntu
+    icon: https://diagrams.mingrammer.com/img/resources/generic/os/ubuntu.png
+    shape: image
+  }
+  windows: {
+    label: Windows
+    icon: https://icons.terrastruct.com/dev%2Fwindows.svg
+    # icon: https://diagrams.mingrammer.com/img/resources/generic/os/windows.png
+    shape: image
+  }
+  browser: {
+    label: Web Browser
+    icon: https://icons.terrastruct.com/tech%2Fbrowser-2.svg
+    shape: image
+  }
+  chrome: {
+    label: Chrome
+    icon: https://icons.terrastruct.com/dev%2Fchrome.svg
+    shape: image
+  }
+  firefox: {
+    label: Firefox
+    icon: https://icons.terrastruct.com/dev%2Ffirefox.svg
+    shape: image
+  }
+  safari: {
+    label: Safari
+    icon: https://icons.terrastruct.com/dev%2Fsafari.svg
+    shape: image
+  }
+  email: {
+    label: Email
+    icon: https://icons.terrastruct.com/aws%2F_General%2FAWS-Email_light-bg.svg
+    shape: image
+  }
+  laptop: {
+    label: Laptop
+    icon: https://icons.terrastruct.com/tech%2Flaptop.svg
+    shape: image
+  }
+  desktop: {
+    label: desktop
+    icon: https://icons.terrastruct.com/tech%2Fdesktop.svg
+    shape: image
+  }
+  server: {
+    label: Server
+    icon: https://icons.terrastruct.com/tech%2F022-server.svg
+    # icon: https://icons.terrastruct.com/essentials%2F112-server.svg
+    shape: image
+  }
+  accessdenied: {
+    label: Access Denied
+    icon: https://icons.terrastruct.com/infra%2F001-access-denied.svg
+    shape: image
+  }
+  firewall: {
+    label: Firewall
+    icon: https://icons.terrastruct.com/infra%2F003-firewall.svg
+    # icon: https://diagrams.mingrammer.com/img/resources/generic/network/firewall.png
+    shape: image
+  }
+  router: {
+    label: Router
+    icon: https://diagrams.mingrammer.com/img/resources/generic/network/router.png
+    shape: image
+  }
+  switch: {
+    label: Switch
+    icon: https://diagrams.mingrammer.com/img/resources/generic/network/switch.png
+    shape: image
+  }
+  network: {
+    label: Network
+    icon: https://diagrams.mingrammer.com/img/resources/generic/network/subnet.png
+    # icon: https://icons.terrastruct.com/infra%2F014-network.svg
+    # icon: https://icons.terrastruct.com/essentials%2F092-network.svg
+    shape: image
+  }
+  internet: {
+    label: Internet
+    icon: https://icons.terrastruct.com/infra%2F022-hosting.svg
+    shape: image
+  }
+  vpn: {
+    label: VPN
+    icon: https://diagrams.mingrammer.com/img/resources/generic/network/vpn.png
+    shape: image
+  }
+  storage: {
+    label: "Storage (SAN/NAS)"
+    icon: https://icons.terrastruct.com/azure%2FStorage%20Service%20Color%2FGeneral%20Storage.svg
+    # icon: https://diagrams.mingrammer.com/img/resources/generic/storage/storage.png
+    shape: image
+  }
+  cisco: {
+    label: Cisco
+    icon: https://cdn-icons-png.flaticon.com/512/882/882730.png
+    shape: image
+  }
+  vmware: {
+    label: VMware
+    icon: https://diagrams.mingrammer.com/img/resources/generic/virtualization/vmware.png
+    shape: image
+  }
+  animated: {
+    style.animated: true
+  }
+  dash: {
+    style.stroke-dash: 5
+  }
+  invisible: {
+    style.opacity: 0
+  }
+}
+
+# object: name
+#
+# id_key: display_name_label
+#
+# object1; object2
+
+# Shapes:
+#
+#   https://d2lang.com/tour/shapes
+#
+#     rectangle
+#     square
+#     page
+#     parallelogram
+#     document
+#     cylinder
+#     queue
+#     package
+#     step
+#     callout
+#     stored_data
+#     person
+#     diamond
+#     oval
+#     circle
+#     hexagon
+#     cloud
+#
+# Special Shapes:
+#
+#     text
+#     code
+#     class
+#     sql_table
+#     image
+#     sequence_diagram
+#
+#
+# set shape to cloud instead of default rectangle
+# id.shape: cloud
+# id.style.fill: transparent
+
+# Connections - arrows
+#
+#   https://d2lang.com/tour/connections
+#
+# XXX: direction of arrow gives hint how to lay out diagram - <- and -> results in different placement positions!!
+#
+#      See:  https://github.com/HariSekhon/Diagrams-as-Code/blob/master/github_actions_cicd.d2
+#
+#     ->
+#     <-
+#     <->
+#     --
+#
+#  must reference objects by id_key, not display_name_label
+
+# one -> way
+# or
+# way <- one
+
+# two <-> way
+
+# equal1 -- equal2
+
+# ===============
+# Object nesting:
+
+# HA.style.double-border: true
+# declare objects inside the HA object
+# HA.Master -> HA.Slave: replication {
+#  style.animated: true
+# }
+
+# https://d2lang.com/tour/style
+# HA.Slave.style.opacity: 0.5
+
+# could also declare them inline
+# HA.Master2 -> HA.Slave2
+# or avoid repeating the outer objects using maps
+# HA: {
+#  Master3 -> Slave3
+# }
+
+# Container labels
+# gcloud: Google Cloud {
+#  GKE.style.3d: true
+# }
+
+# aws: {
+#  # use 'label' reserved word instead of :label suffix
+#  label: Amazon Web Services
+#  EKS.style.3d: true
+#  # refer to something out of the current object using '_' to signify the parent namespace
+#  _.gcloud.GKE <- EKS: migrate
+# }
+
+# ================
+
+# label the connection
+
+# Replica 1 -- Replica 2: Kept in sync
+
+# redundant links
+# Internet -> DataCenter 1
+# Internet -> DataCenter 1: backup link {
+#  # : label for arrow
+#  style.opacity: 0.5 # set the backup link to half the opacity
+#  style.stroke-dash: 5
+# }
+
+# Stage One -> Stage Two -> Stage Three -> Stage Four
+# Stage Four -> Stage One: repeat
+
+# Arrowheads - change shape or label the arrowhead
+#
+#   https://d2lang.com/tour/connections#arrowheads
+#
+#     triangle (default)
+#     arrow (like triangle but pointier)
+#     diamond
+#     Can be further styled as style.filled: true.
+#     circle
+#     Can be further styled as style.filled: true.
+#     cf-one, cf-one-required (cf stands for crows foot)
+#     cf-many, cf-many-required
+#
+
+# a <-> b: arrow_label {
+#  source-arrowhead: arrow_head_label
+#  target-arrowhead: arrow_head_label2 {
+#    shape: diamond
+#  }
+# }
+
+# ======================================
+# Text
+#
+#   https://d2lang.com/tour/text
+#
+# - quote or backslash escape dots for filenames
+# - double || to get one in code blocks have have pipe symbols |
+#
+
+# README: |md
+#  # Header
+#  - list item 1
+#  - list item 2
+# |
+# XXX: must terminate the block string with another pipe "|" symbol
+
+# the above is borderless - so enclose in parent object{}
+
+# "README.md": {
+#  style.multiple: true
+#  |md
+#    # Header2
+#    - list item 3
+#    - list item 4
+#  |
+#  tooltip: You should always have a README!! # hover to see this - works better in svg or --watch - for PNG exports adds numbers and an appendix
+#  link: https://github.com/HariSekhon/Templates # clickable!
+# }
+#
+# test\.sh: {
+#  #
+#  # must leave first line blank to prevent shebang causing this error:
+#  #
+#  #     error on line 944 at column 3253: Attribute class redefined
+#  #
+#  #        https://github.com/terrastruct/d2/issues/1324
+#  #
+#  someshellscriptid: |sh
+#
+#    #!/usr/bin/env bash
+#    echo testing
+#  |
+#  # near: top-right  # https://d2lang.com/tour/positions
+# }
+#
+# my_diagram\.py: {
+#  somecodeobjectid: |py
+#    import diagrams
+#  |
+#  # near: center-right
+# }
+#
+# my\.go: {
+#  somecodeobjectid2: |go
+#    import "fmt"
+#  |
+#  # near: bottom-right
+# }
+
+# ======================================
+# SQL Tables for relationship diagrams
+#
+#   https://d2lang.com/tour/sql-tables
+
+# ======================================
+# UML class diagrams for code
+#
+#   https://d2lang.com/tour/uml-classes
+#
+# ======================================
+# Sequence diagrams for flows
+#
+#   https://d2lang.com/tour/sequence-diagrams
+
+# ======================================
+# Classes
+#
+#   https://d2lang.com/tour/classes
+#
+# - define attributes and apply them to multiple objects
+
+# See here for how to reduce redundant things like icon URLs for many similar objects when creating diagrams of distributed computing cluster technologies:
+#
+#   https://github.com/HariSekhon/Diagrams-as-Code/blob/master/opentsdb_kubernetes_hbase.d2
+#
+#   https://github.com/terrastruct/d2/issues/1281
+
+# classes: {
+#  load balancer: {
+#    label: load\nbalancer
+#    width: 100
+#    height: 200
+#    style: {
+#      stroke-width: 0
+#      fill: "#44C7B1"
+#      shadow: true
+#      border-radius: 5
+#    }
+#  }
+#  unhealthy: {
+#    style: {
+#      fill: "#FE7070"
+#      stroke: "#F69E03"
+#    }
+#  }
+# }
+#
+# web traffic -> web lb
+# web lb.class: load balancer
+#
+# web lb -> api1
+# web lb -> api2
+# web lb -> api3
+#
+# api2.class: unhealthy
+#
+# api1 -> cache lb
+# api3 -> cache lb
+#
+# cache lb.class: load balancer
+
+# ======================================
+# Scenarios
+#
+#   https://d2lang.com/tour/scenarios
+#
+# - can use to create moving SVGs by adding to the base, overriding objects words and settings, changing opacity to make things appear/disappear etc.
+
+# ======================================
+# Steps
+#
+# https://d2lang.com/tour/steps
+#
+# - makes 3 svg images, each building upon the last
+# - or combine into 1 svg with a delay between moving through them to create moving images
+#
+#   d2 --animate-interval <millis_delay>
+
+# bug: animate requires something in the base to work, see:
+#
+#   https://github.com/terrastruct/d2/issues/1280
+
+# code
+#
+# steps: {
+#  1: {
+#    code -> git commit
+#  }
+#  2: {
+#    git commit -> git push
+#  }
+# }

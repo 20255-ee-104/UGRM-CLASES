@@ -1,0 +1,50 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2022-01-06 10:50:06 +0000 (Thu, 06 Jan 2022)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                 C l o u d B e e s   K u s t o m i z a t i o n
+# ============================================================================ #
+
+# https://docs.cloudbees.com/docs/cloudbees-ci/latest/kubernetes-install-guide/installing-kubernetes-using-helm
+#
+# https://docs.cloudbees.com/docs/cloudbees-ci/latest/eks-install-guide/installing-eks-using-helm
+
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: cloudbees-core  # XXX: 8 objects found without explicit namespace defined by kustomize_check_objects_namespaces.sh in the DevOps Bash tools repo
+
+resources:
+  - namespace.yaml
+
+helmCharts:
+  - name: cloudbees-core
+    repo: https://charts.cloudbees.com/public/cloudbees
+    version: 3.45.2+ae0d5d92b008
+    releaseName: cloudbees-core
+    namespace: cloudbees-core
+    includeCRDs: true
+    valuesFile: values.yaml
+
+#patches:
+#  # Old Ingress needs rules replacement to be valid too (done in disable patch further down)
+#  - path: ingress-apiversion.jsonpatch.yaml
+#    target:
+#      kind: Ingress
+
+patchesStrategicMerge:
+  # disable the ingress class if you're not ready to have an ingress letting things through
+  - cloudbees-ingress-disable.patch.yaml

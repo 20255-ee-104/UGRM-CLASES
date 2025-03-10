@@ -1,0 +1,68 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2024-10-09 04:59:31 +0300 (Wed, 09 Oct 2024)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#
+#  https://github.com/HariSekhon/GitHub-Actions
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#           A n s i b l e   P l a y b o o k   S y n t a x   C h e c k
+# ============================================================================ #
+
+---
+name: Ansible Playbook Syntax Check
+
+on:
+  workflow_call:
+    inputs:
+      debug:
+        type: string
+        required: false
+        default: false
+  workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        required: false
+        default: false
+  #schedule:
+  #  - cron: '0 0 * * 1'
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash -euxo pipefail {0}
+
+env:
+  DEBUG: ${{ inputs.debug == true || github.event.inputs.debug == 'true' || '' }}
+
+jobs:
+  ansible_playbook_syntax_check:
+    name: Ansible Playbook Syntax Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Environment
+        run: env | sort
+
+      - name: Git version
+        run: git --version
+
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive  # requires Git 2.18+ to be installed first
+
+      - name: Install Ansible
+        run: pip3 install ansible
+
+      - name: Ansible Playbook Syntax Check
+        run: |
+          find . -name 'playbook.y*ml' -type f |
+          xargs -I {} sh -c 'ansible-playbook {} --syntax-check || exit 1'

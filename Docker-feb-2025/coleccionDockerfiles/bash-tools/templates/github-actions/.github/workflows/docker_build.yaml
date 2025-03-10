@@ -1,0 +1,358 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2022-01-27 18:38:27 +0000 (Thu, 27 Jan 2022)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#
+#  https://github.com/HariSekhon/GitHub-Actions
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                            D o c k e r   B u i l d
+# ============================================================================ #
+
+# Docker Build, Tag & Push to one or more repos
+#
+# Supports:
+#
+#   - DockerHub
+#   - GHCR - GitHub Container Registry
+#   - ACR  - Azure Container Registry
+#   - ECR  - AWS Elastic Container Registry
+#   - GCR  - Google Container Registry
+#   - GAR  - Google Artifact Registry
+#   - GitLab Registry
+#   - Quay.io Registry
+
+---
+name: Docker Build
+
+on:
+  workflow_call:
+    inputs:
+      repo_tags:
+        description: full repository:tag list to push to, space or line separated eg. username/repo:<tag> (defaults to DockerHub), ghcr.io/$GITHUB_REPOSITORY_OWNER/$IMAGE:latest,
+        type: string
+        required: true
+      context:
+        description: the Docker context directory for the docker build
+        type: string
+        default: .
+      file:
+        description: the Dockerfile to build from. Defaults to Dockerfile inside the context. If specifying context, needs to include the context path prefix
+        type: string
+        #default: Dockerfile  # breaks auto-pathing when specifying context, you'd have to remember to set file to $context/Dockerfile yourself, better to omit this
+      max-cache:
+        description: Use external cache image to capture multi-stage build cache, uses GHCR as a max cache external registry (ECR doesn't support this at time of writing)
+        type: boolean
+        default: false
+      build-cache:
+        description: The build cache tag to use
+        type: string
+        default: buildcache
+      dockerfile-repo:
+        description: A separate repo where the Dockerfile for the build can be found. Will be checked out first to a directory of the same name
+        type: string
+        required: false
+      dockerfile-ref:
+        description: The branch from dockerfile-repo to checkout (defaults to the default branch if not specified)
+        type: string
+        required: false
+      debug:
+        type: string
+        required: false
+        default: false
+    secrets:
+      ACR_REGISTRY:
+        # <registry-name>.azurecr.io
+        required: false
+      AZURE_CLIENT_ID:
+        required: false
+      AZURE_CLIENT_SECRET:
+        required: false
+      AWS_ACCESS_KEY_ID:
+        required: false
+      AWS_SECRET_ACCESS_KEY:
+        required: false
+      DOCKERHUB_USER:
+        required: false
+      DOCKERHUB_TOKEN:
+        required: false
+      GAR_JSON_KEY:
+        required: false
+      GAR_REGISTRY:
+        # europe-docker.pkg.dev / us-docker.pkg.dev / asia-docker.pkg.dev
+        required: false
+      GCR_JSON_KEY:
+        required: false
+      GCR_REGISTRY:
+        # gcr.io / eu.gcr.io
+        required: false
+      GITLAB_USER:
+        required: false
+      GITLAB_PASSWORD:
+        required: false
+
+permissions:
+  contents: read
+  packages: write
+
+defaults:
+  run:
+    shell: bash -euxo pipefail {0}
+
+env:
+  REPO_TAGS: ${{ inputs.repo_tags }}
+  BUILDCACHE: ${{ inputs.build-cache }}
+  DOCKERFILE_REPO: ${{ inputs.dockerfile-repo }}
+  DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USER }}
+  DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+  ACR_REGISTRY: ${{ secrets.ACR_REGISTRY }}
+  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  GAR_JSON_KEY: ${{ secrets.GAR_JSON_KEY }}
+  GAR_REGISTRY: ${{ secrets.GAR_JSON_KEY }}
+  GCR_JSON_KEY: ${{ secrets.GCR_JSON_KEY }}
+  GCR_REGISTRY: ${{ secrets.GCR_REGISTRY }}
+  GITLAB_USER: ${{ secrets.GITLAB_USER }}
+  GITLAB_PASSWORD: ${{ secrets.GITLAB_PASSWORD }}
+  QUAY_USER: ${{ secrets.QUAY_USER }}
+  QUAY_TOKEN: ${{ secrets.QUAY_TOKEN }}
+  DEBUG: ${{ inputs.debug == true || github.event.inputs.debug == 'true' || '' }}
+
+jobs:
+  # XXX: workaround for GitHub Actions not supporting secrets in step conditionals:
+  #
+  #   https://github.com/github-community/community/discussions/17983
+  #
+  #   https://github.com/actions/runner/issues/520
+  #
+  determine_registries:
+    name: Determine Registries
+    runs-on: ubuntu-latest
+    outputs:
+      dockerhub: ${{ steps.setvar.outputs.dockerhub }}
+      ghcr: ${{ steps.setvar.outputs.ghcr }}
+      ecr: ${{ steps.setvar.outputs.ecr }}
+      ecr_registry: ${{ steps.setvar.outputs.ecr_registry }}
+      acr: ${{ steps.setvar.outputs.acr }}
+      gcr: ${{ steps.setvar.outputs.gcr }}
+      gar: ${{ steps.setvar.outputs.gar }}
+      gitlab: ${{ steps.setvar.outputs.gitlab }}
+      quay: ${{ steps.setvar.outputs.quay }}
+    steps:
+      - name: Set output variables
+        id: setvar
+        run: |
+          if [ -n "$DOCKERHUB_USER" ] &&
+             [ -n "$DOCKERHUB_TOKEN" ]; then
+
+            echo "DockerHub registry credentials set"
+            echo "dockerhub=true" >> $GITHUB_OUTPUT
+          fi
+
+          if [ -n "$ACR_REGISTRY" ]] &&
+             [ -n "$AZURE_CLIENT_ID" ]] &&
+             [ -n "$AZURE_CLIENT_SECRET" ]] &&
+             grep -qi '\.azurecr\.io' <<< "$REPO_TAGS"; then
+
+            echo "Azure Container Registry credentials set"
+            echo "acr=true" >> $GITHUB_OUTPUT
+          fi
+
+          if [ -n "$AWS_ACCESS_KEY_ID" ]] &&
+             [ -n "$AWS_SECRET_ACCESS_KEY" ]] &&
+             grep -qi '\.amazonaws\.com' <<< "$REPO_TAGS"; then
+
+            echo "AWS ECR registry credentials set"
+            echo "ecr=true" >> $GITHUB_OUTPUT
+            AWS_ECR_REGISTRY="$(grep -om1 '[^[:space:]]*\.amazonaws\.com' <<< "$REPO_TAGS")"
+            echo "ecr_registry=$AWS_ECR_REGISTRY" >> $GITHUB_OUTPUT
+          fi
+
+          if [ -n "$GAR_JSON_KEY" ]] &&
+             [ -n "$GAR_REGISTRY" ]] &&
+             grep -qi '\.pkg\.dev' <<< "$REPO_TAGS"; then
+
+            echo "Google Artifact Registry credentials set"
+            echo "gar=true" >> $GITHUB_OUTPUT
+          fi
+
+          if [ -n "$GCR_JSON_KEY" ]] &&
+             [ -n "$GCR_REGISTRY" ]] &&
+             grep -qi '\.gcr\.io' <<< "$REPO_TAGS"; then
+
+            echo "Google Container Registry credentials set"
+            echo "gcr=true" >> $GITHUB_OUTPUT
+          fi
+
+          if [ -n "$GITLAB_USER" ]] &&
+             [ -n "$GITLAB_PASSWORD" ]] &&
+             grep -qi '\.gitlab\.com' <<< "$REPO_TAGS"; then
+
+            echo "GitLab registry credentials set"
+            echo "gitlab=true" >> $GITHUB_OUTPUT
+          fi
+
+          if [ -n "$QUAY_USER" ]] &&
+             [ -n "$QUAY_TOKEN" ]] &&
+             grep -qi '\.quay\.io' <<< "$REPO_TAGS"; then
+
+            echo "Quay.io registry credentials set"
+            echo "quay=true" >> $GITHUB_OUTPUT
+          fi
+
+  docker_build:
+    name: Docker Build
+    needs: determine_registries
+    runs-on: ubuntu-latest
+    # better done in the calling workflow to prevent manual docker builds on the wrong branches
+    #if: github.ref_name == 'master' || github.ref_name == 'main' || contains(github.ref_name, 'docker')
+    steps:
+      - name: Environment
+        run: env | sort
+
+      - uses: actions/checkout@v3
+        with:
+          submodules: 'true'  # requires Git 2.18+ to be installed first
+
+      - name: Generate environment variable DOCKERFILE_CHECKOUT_PATH
+        if: inputs.dockerfile-repo
+        run: |
+          DOCKERFILE_CHECKOUT_PATH="$DOCKERFILE_REPO"
+          DOCKERFILE_CHECKOUT_PATH="${DOCKERFILE_CHECKOUT_PATH##*/}"
+          echo "DOCKERFILE_CHECKOUT_PATH=$DOCKERFILE_CHECKOUT_PATH" >> "$GITHUB_ENV"
+
+      - name: Generate environment variable AWS_ECR_REGISTRY
+        #if: contains(inputs.repo_tags, '.amazonaws.com')
+        if: needs.determine_registries.outputs.ecr
+        env:
+          REGISTRY: needs.determine_registries.outputs.ecr_registry
+        run: echo "AWS_ECR_REGISTRY=$REGISTRY" >> "$GITHUB_ENV"
+
+      - name: Git Checkout Dockerfile repo
+        if: inputs.dockerfile-repo
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ inputs.dockerfile-repo }}
+          ref: ${{ inputs.dockerfile-ref }}
+          submodules: 'true'  # requires Git 2.18+ to be installed first
+          path: ${{ env.DOCKERFILE_CHECKOUT_PATH }}
+
+      - name: Docker Login GHCR
+        env:
+          TOKEN: ${{github.token}}
+        run: docker login ghcr.io -u "$GITHUB_REPOSITORY_OWNER" --password-stdin <<< "$TOKEN"
+
+      - name: Docker Login to DockerHub
+        if: needs.determine_registries.outputs.dockerhub == 'true'
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Login to ACR
+        if: needs.determine_registries.outputs.acr == 'true'
+        uses: docker/login-action@v1
+        with:
+          registry: ${{ secrets.ACR_REGISTRY }}
+          username: ${{ secrets.AZURE_CLIENT_ID }}
+          password: ${{ secrets.AZURE_CLIENT_SECRET }}
+
+      - name: Login to AWS ECR
+        if: needs.determine_registries.outputs.ecr == 'true'
+        uses: docker/login-action@v1
+        with:
+          registry: ${{ env.AWS_ECR_REGISTRY }}
+          username: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          password: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Login to GCR
+        if: needs.determine_registries.outputs.gcr == 'true'
+        uses: docker/login-action@v1
+        with:
+          registry: ${{ secrets.GCR_REGISTRY }}
+          username: _json_key
+          password: ${{ secrets.GCR_JSON_KEY }}
+
+      - name: Login to GAR
+        if: needs.determine_registries.outputs.gar == 'true'
+        uses: docker/login-action@v1
+        with:
+          registry: ${{ secrets.GAR_REGISTRY }}
+          username: _json_key
+          password: ${{ secrets.GAR_JSON_KEY }}
+
+      - name: Login to GitLab
+        if: needs.determine_registries.outputs.gitlab == 'true'
+        uses: docker/login-action@v1
+        with:
+          registry: registry.gitlab.com
+          username: ${{ secrets.GITLAB_USER }}
+          password: ${{ secrets.GITLAB_PASSWORD }}
+
+      - name: Login to Quay.io
+        if: needs.determine_registries.outputs.quay == 'true'
+        uses: docker/login-action@v1
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_USER }}
+          password: ${{ secrets.QUAY_TOKEN }}
+
+      - name: Generate environment variable CACHE_FROM
+        run: |
+          echo "CACHE_FROM<<EOF" >> "$GITHUB_ENV"
+            for repo_tag in $(tr '\n' ' ' <<< "$REPO_TAGS"); do
+              echo "type=registry,ref=$repo_tag" >> "$GITHUB_ENV"
+            done
+          echo "EOF" >> "$GITHUB_ENV"
+
+      - name: Generate environment variable DOCKER_IMAGE_CACHE
+        if: ${{ inputs.max-cache }}
+        env:
+          REPO: ${{ github.repository }}
+        run: echo "DOCKER_IMAGE_CACHE=ghcr.io/$REPO" >> "$GITHUB_ENV"
+        #run: echo "DOCKER_IMAGE_CACHE=$AWS_ECR_REGISTRY/$APP-cache" >> $GITHUB_ENV  # doesn't work, ECR simply doesn't support it
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      # XXX: Normal build, use inline cache when max-cache input is not set to 'true' - fine for most purposes except for multi-stage builds
+      - name: Docker Build & Push
+        if: ${{ ! inputs.max-cache }}
+        uses: docker/build-push-action@v2
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.file }}
+          tags: ${{ env.REPO_TAGS }}
+          push: true
+          cache-from: ${{ env.CACHE_FROM }}
+          cache-to: type=inline
+
+      # call like so:
+      #
+      #   jobs:
+      #     docker_build:
+      #       uses: HariSekhon/GitHub-Actions/.github/workflows/docker_build.yaml@master
+      #       with:
+      #         max-cache: true
+      #         ...
+      #
+      - name: Docker Build & Push with external build cache
+        if: ${{ inputs.max-cache }}
+        uses: docker/build-push-action@v2
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.file }}
+          tags: ${{ env.REPO_TAGS }}
+          push: true
+          cache-from: |
+            type=registry,ref=${{env.REPO}}:${{env.BUILDCACHE}}
+            ${{ env.CACHE_FROM }}
+          cache-to: type=registry,ref=${{env.DOCKER_IMAGE_CACHE}}:${{env.BUILDCACHE}},mode=max  # XXX: fails to push to ECR which doesn't support external registry cache export, so set to GHCR for cache instead

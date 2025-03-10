@@ -1,0 +1,463 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2023-04-10 22:41:02 +0100 (Mon, 10 Apr 2023)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#  kics-scan ignore
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                       K o n g   C h a r t   V a l u e s
+# ============================================================================ #
+
+# helm repo add kong https://charts.konghq.com
+#
+# helm show values kong/kong >> kong-values.yaml
+
+---
+#image:
+  #repository: kong
+  #tag: "3.2"  # XXX: must be compatible version with ingressController.tag below
+  # Kong Enterprise
+  # repository: kong/kong-gateway
+  # tag: "3.2"
+
+# XXX: required for HPA
+resources:
+  requests:
+    cpu: 1
+    memory: 2G
+  limits:
+    cpu: 1
+    memory: 2G
+
+ingressController:
+  #tag: "2.9"  # XXX: must match both Kong version above and Kubernetes cluster version:  https://docs.konghq.com/kubernetes-ingress-controller/latest/references/version-compatibility/
+  #
+  # XXX: required for HPA
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 100m
+      memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  behavior: {}
+  ## targetCPUUtilizationPercentage only used if the cluster doesn't support autoscaling/v2 or autoscaling/v2beta
+  targetCPUUtilizationPercentage:
+  ## Otherwise for clusters that do support autoscaling/v2 or autoscaling/v2beta, use metrics
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 50%
+
+podSecurityPolicy:
+  enabled: true
+  labels: {}
+  annotations: {}
+  spec:
+    privileged: false
+    fsGroup:
+      rule: RunAsAny
+    runAsUser:
+      rule: RunAsAny
+    runAsGroup:
+      rule: RunAsAny
+    seLinux:
+      rule: RunAsAny
+    supplementalGroups:
+      rule: RunAsAny
+    volumes:
+      - 'configMap'
+      - 'secret'
+      - 'emptyDir'
+      - 'projected'
+    allowPrivilegeEscalation: false
+    hostNetwork: false
+    hostIPC: false
+    hostPID: false
+    # Make the root filesystem read-only. This is not compatible with Kong Enterprise <1.5.
+    # If you use Kong Enterprise <1.5, this must be set to false.
+    readOnlyRootFilesystem: true
+
+# XXX: requires priorityclass.yaml with this definition
+priorityClassName: high-priority
+
+securityContext: {}
+
+containerSecurityContext:
+  readOnlyRootFilesystem: true
+
+# ============================================================================ #
+# Environment variables applies to all deployments, both controller and proxy
+#
+# chart takes all entries defined under `.env` and transforms them into into `KONG_*` environment variables for Kong containers
+#
+# Their names here should match the names used in:
+#
+#     https://github.com/Kong/kong/blob/master/kong.conf.default
+#
+# See also:
+#
+#     https://docs.konghq.com/latest/configuration
+#
+#env:
+#  some_var:
+#    value: some_value
+#    #valueFrom:
+#    #  secretKeyRef:
+#    #    name: some-secret
+#    #    key: some-key-in-secret
+
+#env:
+#  trusted_ips:
+#    value: 0.0.0.0/0
+#  real_ip_recursive:
+#    value: "on"
+
+# ========================================================
+# Environments variables that doesn't require KONG_ prefix eg. for plugins access environment specific credentials or tokens
+#
+# Note that these environment variables will only apply to the proxy and init container. The ingress-controller container has its own customEnv section
+#
+# customEnv:
+#   real_ip_header:
+#     value: X-Forwarded-For
+#   api_token:
+#     valueFrom:
+#       secretKeyRef:
+#         key: token
+#         name: api_key
+#   client_name: testClient
+
+# ============================================================================ #
+
+proxy:
+  enabled: true
+  type: LoadBalancer
+  loadBalancerClass:
+  # Override proxy Service name
+  nameOverride: ""
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: tcp
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internal"  # XXX: only available via VPN to internal networks
+  labels:
+    enable-metrics: "true"
+
+  http:
+    enabled: true
+    servicePort: 80
+    containerPort: 8000
+
+  tls:
+    enabled: true
+    servicePort: 443
+    containerPort: 8443
+    parameters:
+      - http2
+
+# Kong Admin API - usually recommended to disable, but useful for API devs like me
+admin:
+  enabled: false  # XXX: enable if you want to use the Admin API, which is mostly read-only in the Kubernetes-native KIC deployment style
+  type: ClusterIP  # default: NodePort
+  loadBalancerClass:
+  # To specify annotations or labels for the admin service, add them to the respective
+  # "annotations" or "labels" dictionaries below.
+  annotations:
+    # XXX: this goes onto the service object to prevent error '400 Bad Request  The plain HTTP request was sent to HTTPS port'
+    konghq.com/protocol: https
+    #service.beta.kubernetes.io/aws-load-balancer-proxy-protocol: "*"
+  labels: {}
+
+  http:
+    # Enable plaintext HTTP listen for the admin API
+    # Disabling this and using a TLS listen only is recommended for most configuration
+    enabled: false
+    servicePort: 8001
+    containerPort: 8001
+    # Set a nodePort which is available if service type is NodePort
+    # nodePort: 32080
+    # Additional listen parameters, e.g. "reuseport", "backlog=16384"
+    parameters: []
+
+  tls:
+    enabled: true
+    servicePort: 8444
+    containerPort: 8444
+    # Set a target port for the TLS port in the admin API service, useful when using TLS
+    # termination on an ELB.
+    # overrideServiceTargetPort: 8000
+    # Set a nodePort which is available if service type is NodePort
+    # nodePort: 32443
+    # Additional listen parameters, e.g. "reuseport", "backlog=16384"
+    parameters:
+      - http2
+
+    # Specify the CA certificate to use for TLS verification of the Admin API client by:
+    # - secretName - the secret must contain a key named "tls.crt" with the PEM-encoded certificate.
+    # - caBundle (PEM-encoded certificate string).
+    # If both are set, caBundle takes precedence.
+    client:
+      caBundle: ""
+      secretName: ""
+
+  ingress:
+    enabled: true
+    #ingressClassName: nginx
+    hostname: kong-api.domain.com  # XXX: Edit
+    tls: kong-api-tls
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt
+      ingress.kubernetes.io/force-ssl-redirect: "true"
+      kubernetes.io/ingress.class: kong  # deprecated, and cannot also be set if ingressClassName is set
+      konghq.com/protocols: https
+      konghq.com/plugins: ip-restriction-private-only
+    path: /
+    pathType: Prefix  # default: ImplementationSpecific
+
+enterprise:
+  enabled: true  # required to get Kong Manager - see https://github.com/Kong/charts/issues/782
+  # Kong Enterprise license secret name
+  # This secret must contain a single 'license' key, containing your base64-encoded license data
+  # The license secret is required to unlock all Enterprise features. If you omit it,
+  # Kong will run in free mode, with some Enterprise features disabled.
+  # license_secret: kong-enterprise-license
+  vitals:
+    enabled: true
+  portal:
+    enabled: false
+  rbac:
+    enabled: false
+    admin_gui_auth: basic-auth
+    # If RBAC is enabled, this Secret must contain an admin_gui_session_conf key
+    # The key value must be a secret configuration, following the example at
+    # https://docs.konghq.com/enterprise/latest/kong-manager/authentication/sessions
+    session_conf_secret: kong-session-config
+    # If admin_gui_auth is not set to basic-auth, provide a secret name which
+    # has an admin_gui_auth_conf key containing the plugin config JSON
+    admin_gui_auth_conf_secret: CHANGEME-admin-gui-auth-conf-secret
+  # For configuring emails and SMTP, please read through:
+  # https://docs.konghq.com/enterprise/latest/developer-portal/configuration/smtp
+  # https://docs.konghq.com/enterprise/latest/kong-manager/networking/email
+  smtp:
+    enabled: false
+    portal_emails_from: none@example.com
+    portal_emails_reply_to: none@example.com
+    admin_emails_from: none@example.com
+    admin_emails_reply_to: none@example.com
+    smtp_admin_emails: none@example.com
+    smtp_host: smtp.example.com
+    smtp_port: 587
+    smtp_auth_type: ''
+    smtp_ssl: nil
+    smtp_starttls: true
+    auth:
+      # If your SMTP server does not require authentication, this section can
+      # be left as-is. If smtp_username is set to anything other than an empty
+      # string, you must create a Secret with an smtp_password key containing
+      # your SMTP password and specify its name here.
+      smtp_username: ''  # e.g. postmaster@example.com
+      smtp_password_secret: CHANGEME-smtp-password
+
+# XXX: not creating Kong Manager objects in non-enterprise mode - https://github.com/Kong/charts/issues/782
+manager:
+  enabled: true
+  type: ClusterIP  # default: NodePort
+  #type: LoadBalancer
+  #loadBalancerClass:
+  #annotations:
+  #  service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+  #  service.beta.kubernetes.io/aws-load-balancer-type: nlb
+  #  service.beta.kubernetes.io/aws-load-balancer-backend-protocol: tcp
+  #  service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+  #  service.beta.kubernetes.io/aws-load-balancer-scheme: "internal"  # XXX: only available via VPN to internal networks
+
+  http:
+    enabled: true
+    servicePort: 8002
+    containerPort: 8002
+    parameters: []
+
+  tls:
+    enabled: true
+    servicePort: 8445
+    containerPort: 8445
+    parameters:
+      - http2
+
+  ingress:
+    enabled: true
+    #ingressClassName: nginx
+    tls: kong-manager-tls
+    hostname: kong.domain.com  # XXX: Edit
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt
+      ingress.kubernetes.io/force-ssl-redirect: "true"
+      kubernetes.io/ingress.class: kong  # deprecated, and cannot also be set if ingressClassName is set
+      konghq.com/protocols: https
+      konghq.com/plugins: ip-restriction-private-only
+    path: /
+    pathType: Prefix  # default: ImplementationSpecific
+
+# XXX: only materializes if enterprise.enabled = true
+portal:
+  enabled: false
+  type: ClusterIP  # default: NodePort
+  #type: LoadBalancer
+  #loadBalancerClass:
+  #annotations:
+  #  service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+  #  service.beta.kubernetes.io/aws-load-balancer-type: nlb
+  #  service.beta.kubernetes.io/aws-load-balancer-backend-protocol: tcp
+  #  service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+  #  service.beta.kubernetes.io/aws-load-balancer-scheme: "internal"  # XXX: only available via VPN to internal networks
+
+  http:
+    enabled: true
+    servicePort: 8003
+    containerPort: 8003
+
+  tls:
+    enabled: true
+    servicePort: 8446
+    containerPort: 8446
+    parameters:
+      - http2
+
+  ingress:
+    enabled: true
+    #ingressClassName: nginx
+    tls: kong-portal-tls
+    hostname: kong-portal.domain.com  # XXX: Edit
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt
+      kubernetes.io/ingress.class: nginx  # deprecated, and cannot also be set if ingressClassName is set
+      ingress.kubernetes.io/ssl-redirect: "true"
+      ingress.kubernetes.io/force-ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+      nginx.ingress.kubernetes.io/whitelist-source-range: |
+        10.0.0.0/8,
+        172.16.0.0/16,
+        192.168.0.0/16
+    path: /
+    pathType: Prefix  # default: ImplementationSpecific
+
+# XXX: only materializes if enterprise.enabled = true
+portalapi:
+  enabled: false
+  type: ClusterIP  # default: NodePort
+  #type: LoadBalancer
+  #loadBalancerClass:
+  #annotations:
+  #  service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+  #  service.beta.kubernetes.io/aws-load-balancer-type: nlb
+  #  service.beta.kubernetes.io/aws-load-balancer-backend-protocol: tcp
+  #  service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+  #  service.beta.kubernetes.io/aws-load-balancer-scheme: "internal"  # XXX: only available via VPN to internal networks
+
+  http:
+    enabled: true
+    servicePort: 8004
+    containerPort: 8004
+
+  tls:
+    enabled: true
+    servicePort: 8447
+    containerPort: 8447
+    parameters:
+      - http2
+
+  ingress:
+    enabled: true
+    #ingressClassName: nginx
+    tls: kong-portal-api-tls
+    hostname: kong-portal-api.domain.com  # XXX: Edit
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt
+      kubernetes.io/ingress.class: nginx  # deprecated, and cannot also be set if ingressClassName is set
+      ingress.kubernetes.io/ssl-redirect: "true"
+      ingress.kubernetes.io/force-ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+      nginx.ingress.kubernetes.io/whitelist-source-range: |
+        10.0.0.0/8,
+        172.16.0.0/16,
+        192.168.0.0/16
+    path: /
+    pathType: Prefix  # default: ImplementationSpecific
+
+certificates:
+  enabled: true  # default: false - but we want real certificates from Cert Manager rather than self-signed for the tls components
+
+  # Set either `issuer` or `clusterIssuer` to the name of the desired cert manager issuer
+  # If left blank a built in self-signed issuer will be created and utilized
+  #issuer: letsencrypt
+  clusterIssuer: letsencrypt
+
+  proxy:
+    enabled: true
+    #issuer: letsencrypt
+    clusterIssuer: letsencrypt
+    # Use commonName and dnsNames to set the common name and dns alt names which this
+    # certificate is valid for. Wildcard records are supported by the included self-signed issuer.
+    commonName: kong.domain.com  # XXX: Edit
+    # Remove the "[]" and uncomment/change the examples to add SANs
+    dnsNames: []
+    # - "app.example"
+    # - "*.apps.example"
+    # - "*.kong.example"
+
+  admin:
+    enabled: true
+    #issuer: letsencrypt
+    clusterIssuer: letsencrypt
+    # Use commonName and dnsNames to set the common name and dns alt names which this
+    # certificate is valid for. Wildcard records are supported by the included self-signed issuer.
+    commonName: kong-admin.domain.com  # XXX: Edit
+    # Remove the "[]" and uncomment/change the examples to add SANs
+    dnsNames: []
+    # - "manager.kong.example"
+
+  portal:
+    enabled: true
+    #issuer: letsencrypt
+    clusterIssuer: letsencrypt
+    # Use commonName and dnsNames to set the common name and dns alt names which this
+    # certificate is valid for. Wildcard records are supported by the included self-signed issuer.
+    commonName: kong-portal.domain.com  # XXX: Edit
+    # Remove the "{}" and uncomment/change the examples to add SANs
+    dnsNames: []
+    # - "manager.kong.example"
+
+  cluster:
+    enabled: true
+    # Issuers used by the control and data plane releases must match for this certificate.
+    #issuer: letsencrypt
+    clusterIssuer: letsencrypt
+    #commonName: kong-cluster.domain.com  # XXX: Edit
+    # dnsNames: []

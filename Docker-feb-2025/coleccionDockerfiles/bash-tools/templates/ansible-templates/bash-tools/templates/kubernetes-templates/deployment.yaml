@@ -1,0 +1,436 @@
+#
+#  Author: Hari Sekhon
+#  Date: [% DATE  # 2019-11-25 13:47:16 +0000 (Mon, 25 Nov 2019) %]
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn
+#  and optionally send me feedback to help improve or steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                              D e p l o y m e n t
+# ============================================================================ #
+
+# https://kubernetes.io/docs/concepts/workloads/controllers/deployment
+#
+# https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/deployment-v1/
+
+# This is your main point of deploying apps, and has lots of tricks and best practices baked in
+#
+# Edit / Delete as necessary for your deployment (it's easier than remembering / finding / adding all this stuff)
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: NAME
+  namespace: NAMESPACE
+  labels:
+    app: APP
+  annotations:
+    # see also k8s_pod_disruption_budget.yaml
+    cluster-autoscaler.kubernetes.io/safe-to-evict: "true"  # set to "false" for apps that don't like disruption, but that might prevent pods with emptyDir volumes getting rescheduled, preventing cluster autoscaler from scaling down the node pool
+    # adds ArgoCD link symbol in the UI next to object
+    #link.argocd.argoproj.io/external-link: http://www.domain.com/path
+spec:
+  paused: false
+  minReadySeconds: 0  # secs healthy before serving
+  progressDeadlineSeconds: 120
+  revisionHistoryLimit: 10  # how many ReplicaSets specs to retain for rollbacks
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # XXX: Do not set maxUnavailable to integers, you may cause outages in environments where the replicas <= maxUnavailable due to Dev environments with less replicas or where an HPA has scaled down
+      maxUnavailable: 25%  # default: 25% - rounds down to int replicas
+      maxSurge: 25%        # default: 25% - rounds up to int replicas - set higher for faster deployments for apps with long load times to ready eg. webapps with pre-loaded local cache
+  selector:
+    matchLabels:
+      app: APP
+      role: master
+      tier: backend
+  replicas: 3  # XXX: don't define replicas if using HPA, otherwise gets overridden and reset to this number every deploy which could cause load issues
+  template:
+    metadata:
+      labels:
+        app: APP
+        role: master
+        tier: backend
+    spec:
+      # for business critical workloads to get priority access to the stable node pool instead of preemptible node pool, will evict lower priority pods to preemptible node pool (default 0) if necessary. Requires: priorityclass.yaml
+      #
+      # priorityClassName: high-priority
+      #
+      #nodeSelector:
+        #myLabel: myFastNodes
+        #disktype: ssd
+        #kubernetes.io/arch: amd64
+        #kubernetes.io/os: linux
+        #node.kubernetes.io/instance-type: m3.medium    # 1.17+
+        ## for persistent disks limited to 2 zones combined with GKE regional clusters
+        #topology.kubernetes.io/zone: europe-west2-a  # 1.17+
+        #topology.kubernetes.io/region: europe-west2    # 1.17+
+        #
+        # GKE specific - hard requirement - prefer affinity below as safer soft requirement to still allow scheduling if node pool becomes unavailable (eg. recreated by Terraform)
+        #
+        # cloud.google.com/gke-nodepool: POOL_NAME
+        #
+        # GKE Autopilot
+        #
+        #   https://cloud.google.com/kubernetes-engine/docs/concepts/autopilot-compute-classes#when-to-use
+        #
+        # cloud.google.com/compute-class: Balanced
+        #
+      #
+      schedulerName: default-scheduler
+      # https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#affinity-and-anti-affinity
+      # XXX: not recommended in clusters greater than several hundred nodes due to significant CPU overhead slowing down scheduling
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1  # 1 to 100, higher is stronger
+              preference:
+                matchExpressions:
+                  - key: accelerator-type
+                    operator: In
+                    values:
+                      - gpu
+                      - tpu
+              # XXX: prefer non-preemptible VMs unless unavailable
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: cloud.google.com/gke-preemptible
+                    operator: DoesNotExist
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  # AND's everything under this matchExpression
+                  #
+                  # XXX: remove this if the pod is safe to preempt
+                  #
+                  # Node preemption:
+                  # - shuts down pods ungracefully
+                  # - ignores PodDisruptionBudget
+                  # - invalidates Stateful guarantees and can lead to data loss !!
+                  # https://cloud.google.com/kubernetes-engine/docs/how-to/preemptible-vms#kubernetes_constraint_violations
+                  #
+                  # GCP: https://cloud.google.com/kubernetes-engine/docs/how-to/preemptible-vms#best_practices
+                  #
+                  # gke-preemptible not valid on GKE AutoPilot clusters - remove in that case and leave only gke-spot
+                  - key: cloud.google.com/gke-preemptible
+                    operator: DoesNotExist
+                  - key: cloud.google.com/gke-spot
+                    operator: DoesNotExist
+                  #
+                  # AWS: https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html
+                  - key: eks.amazonaws.com/capacityType
+                    operator: NotIn
+                    values:
+                      - SPOT
+                  #
+                  # Azure: https://docs.microsoft.com/en-us/azure/aks/spot-node-pool
+                  - key: kubernetes.azure.com/scalesetpriority
+                    operator: NotIn
+                    values:
+                      - spot
+                  #
+                  - key: kubernetes.io/e2e-az-name
+                    operator: In # NotIn, Exists, DoesNotExist
+                    # OR's the values
+                    values:
+                      - europe-west-1b
+                      - europe-west-1c
+        #podAffinity:
+        podAntiAffinity:
+          # XXX: spread app across AZs
+          # XXX: use preferred if num_replicas > num_AZs
+#          preferredDuringSchedulingIgnoredDuringExecution:
+#          - weight: 100
+#            podAffinityTerm:
+#              topologyKey: topology.kubernetes.io/zone
+#              labelSelector:
+#                matchExpressions:
+#                - key: app
+#                  operator: In
+#                  values:
+#                  - APP
+          requiredDuringSchedulingIgnoredDuringExecution:
+              # XXX: spread app across AZs
+            - topologyKey: topology.kubernetes.io/zone
+              labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - APP
+              # XXX: spread app across hosts (default prefers spread, whereas this requires it)
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - APP
+      # ignore taints
+      #tolerations:
+        #- key: "myKey"
+        #  operator: "Exists"  # if myKey exists ignore NoSchedule
+        #  operator: "Equal"   # if myKey's value = "value" ignore NoSchedule
+        #    value: "value"
+        #  effect: "NoSchedule"
+      # XXX: allow scheduling on preemptible VMs with a NoSchedule taint if safe to do so
+      tolerations:
+        # XXX: this must be set yourself on AWS EKS / GCP GKE
+        # taint AWS spot / GCP preemptible nodepools with short 'preemptible=true:NoSchedule' taint for convenience
+        #- key: cloud.google.com/gke-preemptible
+        - key: preemptible
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+          # Azure auto-adds this taint, no need to create manually
+        - key: kubernetes.azure.com/scalesetpriority
+          operator: Equal
+          value: spot
+          effect: NoSchedule
+      terminationGracePeriodSeconds: 120  # how long between SIGTERM and SIGKILL (kill -9) - may want to set higher than default 30 secs eg. 1800 for Cassandra
+      dnsPolicy: ClusterFirst # use coredns, Default uses node's dns resolution
+      restartPolicy: Always
+      #serviceAccountName: NAME
+      securityContext:
+        # see pod-security-policy.yaml for wider enforcement
+        runAsNonRoot: true
+        #runAsUser: 0   # not recommended
+        fsGroup: 1000   # group to own volumeMounts so they can be written to by the user-level process
+        # XXX: don't chgrp all the many small files unless the root mismatches, prevents long outages on pod creation hanging with multiple of these error messages:
+        #
+        #   Unable to attach or mount volumes: unmounted volumes=[jenkins-home], unattached volumes=[kube-api-access-6q2kb jenkins-home]: timed out waiting for the condition
+        #
+        #   https://docs.cloudbees.com/docs/cloudbees-ci-kb/latest/cloudbees-ci-on-modern-cloud-platforms/timeout-when-attaching-volumes-in-kubernetes
+        #
+        fsGroupChangePolicy: OnRootMismatch
+      initContainers:
+        - name: init-files
+          image: alpine/git:latest
+          command: ['git', 'clone', 'https://github.com/HariSekhon/DevOps-Python-tools /data']
+          volumeMounts:
+            - name: app-vol
+              mountPath: /data
+        - name: init-mysql-service
+          image: busybox:latest
+          command: ['sh', '-c', 'until nslookup mysql; do echo waiting for mysql service DNS to come up; sleep 1; done']
+        - name: init-mysql-endpoint
+          image: busybox:latest
+          command: ['sh', '-c', 'until nc -z mysql 3306; do echo waiting for mysql endpoint port to come up; sleep 1; done']
+      containers:
+        - name: master
+          image: k8s.gcr.io/APP:latest
+          imagePullPolicy: IfNotPresent  # set to Always if replacing a docker_image:tag or using :latest in development
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: HEAP_SIZE
+              value: 1G
+            - name: CASSANDRA_SEEDS
+              value: cassandra-0.cassandra.svc.cluster.local,cassandra-1.cassandra.svc.cluster.local,cassandra-2.cassandra.svc.cluster.local
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP  # K8S API path
+            - name: CLOUD_SQL_INSTANCE
+              valueFrom:
+                configMapKeyRef:
+                  key: cloud-sql-instance
+                  name: my-configmap
+            - name: MYSECRET
+              valueFrom:
+                secretKeyRef:
+                  name: my-secret
+                  key: my-secret
+          #
+          # Probe fields:
+          #
+          #   https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/#configure-probes
+          #
+          # newer versions of Kubernetes
+          # use this for slow starting applications without compromising the responsiveness of readiness or liveness probes which do not start until after this
+          #startupProbe:
+          #  # http, tcp or exec
+          #  httpGet:
+          #    path: /healthz
+          #    port: 8080  # or 'http' to use name from ports section
+          #    #httpHeaders:
+          #    #  - name: Custom-Header
+          #    #    value: Awesome
+          #    #scheme: HTTPS
+          #    #insecureSkipTLSVerify: true
+          #  # only uncomment if you can't use http check, must delete http check otherwise will get this error:
+          #  # invalid: spec.containers[0].livenessProbe.tcpSocket: Forbidden: may not specify more than 1 handler type
+          #  #tcpSocket:
+          #  #  port: 8080
+          #  #grpc:  # Kubernetes 1.27+
+          #  #  port: 2379  # must be number, not port name or fqdn
+          #  #  #service: readiness  # to use same grpc port to distinguish between checks
+          #  #exec:
+          #  #  command:
+          #  #    - pgrep -f somecommand
+          #  initialDelaySeconds: 0 # default
+          #  successThreshold: 1    # default
+          #  failureThreshold: 3    # default
+          #  periodSeconds: 10      # default (interval)
+          #  timeoutSeconds: 1      # default
+          readinessProbe:
+            # http, tcp or exec
+            httpGet:
+              path: /healthz
+              port: 8080  # or 'http' to use name from ports section
+              #httpHeaders:
+              #  - name: Custom-Header
+              #    value: Awesome
+              #scheme: HTTPS
+              #insecureSkipTLSVerify: true
+            # only uncomment if you can't use http check, must delete http check otherwise will get this error:
+            # invalid: spec.containers[0].livenessProbe.tcpSocket: Forbidden: may not specify more than 1 handler type
+            #tcpSocket:
+            #  port: 8080
+            #grpc:  # Kubernetes 1.27+
+            #  port: 2379  # must be number, not port name or fqdn
+            #  #service: readiness  # to use same grpc port to distinguish between checks
+            #exec:
+            #  command:
+            #    - pgrep -f somecommand
+            initialDelaySeconds: 0 # default
+            successThreshold: 1    # default
+            failureThreshold: 3    # default
+            periodSeconds: 10      # default (interval)
+            timeoutSeconds: 1      # default
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080  # or 'http' to use name from ports section
+              #httpHeaders:
+              #  - name: Custom-Header
+              #    value: Awesome
+              #scheme: HTTPS
+              #insecureSkipTLSVerify: true
+            #tcpSocket:
+            #  port: 8080
+            #grpc:  # Kubernetes 1.27+
+            #  port: 2379  # must be number, not port name or fqdn
+            #  #service: readiness  # to use same grpc port to distinguish between checks
+            #exec:
+            #  command:
+            #    - pgrep -f somecommand
+            initialDelaySeconds: 0 # default
+            successThreshold: 1    # default
+            failureThreshold: 3    # default
+            periodSeconds: 10      # default (interval)
+            timeoutSeconds: 1      # default
+          resources:
+            requests:
+              # millicores - 1/1000 of a CPU / vCPU
+              # 100m = 1/10th of CPU core
+              cpu: 100m
+              memory: 100Mi # MiB
+            limits:
+              cpu: "1"
+              memory: 4Gi  # GiB
+          volumeMounts:
+            - name: APP-vol
+              mountPath: /mnt/APP-vol
+              readOnly: true
+            - name: env
+              mountPath: /app/.env
+              subPath: .env
+              readOnly: true
+          securityContext:
+            runAsNonRoot: true
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+              add: ["IPC_LOCK"]  # allow mlock to avoid paging ram to disk, for security or performance eg. NoSQL low latency datastores
+          lifecycle:
+           #postStart:
+           #  exec:
+           #    command: ["/bin/sh", "-c", "echo Hello from the postStart handler > /usr/share/message"]
+            # execute this when sending TERM to container
+            preStop:
+              # http call or exec
+              exec:
+                # recent nginx-ingress already has this, but still a decent example to gracefully finish connections on your own nginx via SIGQUIT not SIGTERM
+                # also remember to increase terminationGracePeriodSeconds
+                #command: ["/bin/sh","-c","nginx -s quit; while killall -0 nginx; do sleep 1; done"]
+                command:
+                  - /bin/sh
+                  - -c
+                  - nodetool drain
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File  # FallbackToLogsOnError to use container logs if message file is empty upon container error
+        #
+        # GCP Cloud SQL Proxy sidecar - app can then connect to DB at localhosta (see also cloud-sql-proxy*.yaml for a standalone shared deployment & service)
+        #
+        #   https://cloud.google.com/sql/docs/postgres/connect-kubernetes-engine
+        #
+        # Set up Workload Identity integration between k8s SA + GCP SA
+        #
+        #   https://cloud.google.com/sql/docs/postgres/connect-kubernetes-engine#workload-identity
+        #
+        - name: cloud-sql-proxy
+          image: gcr.io/cloudsql-docker/gce-proxy:1.17
+          command:
+            - /cloud_sql_proxy
+            - "-ip_address_types=PRIVATE"
+            # XXX: trade off exposing listener on 0.0.0.0 required for having a kubernetes health check
+            - "-instances=$(CLOUD_SQL_INSTANCE)=tcp:5432"  # populate CLOUD_SQL_INSTANCE env var via configmap, must also specify a port (eg. 5432 for PostgreSQL or 3306 for MySQL, or else a -dir option if using socket dir)
+          securityContext:
+            # The default Cloud SQL proxy image runs as the
+            # "nonroot" user and group (uid: 65532) by default.
+            runAsNonRoot: true
+          env:
+            - name: CLOUD_SQL_INSTANCE
+              valueFrom:
+                configMapKeyRef:
+                  # XXX: Edit
+                  name: my-configmap
+                  key: cloud-sql-instance
+          readinessProbe:
+            tcpSocket:
+              #port: 3306  # mysql
+              port: 5432   # postgres
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              #port: 3306  # mysql
+              port: 5432   # postgres
+            failureThreshold: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128mi
+            limits:
+              cpu: "1"
+              memory: 2gi
+      volumes:
+        - name: APP-vol
+          # GKE will automatically create the underlying disk for us using default storage provider's dynamic provisioner
+          persistentVolumeClaim:
+            claimName: APP-dynamic-pvc
+        - name: env
+          configMap:
+            name: myconfigmap
+            defaultMode: 0400
+            items:
+              - key: .env
+                path: .env

@@ -1,0 +1,55 @@
+{
+  "name": "react-tetris",
+  "version": "0.3.0",
+  "description": "Embed a game of Tetris in your React app",
+  "main": "lib/components/Tetris.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/brandly/react-tetris"
+  },
+  "dependencies": {
+    "keymaster": "1.6.2",
+    "react-tetris": "file:"
+  },
+  "scripts": {
+    "build:lib": "tsc",
+    "build:app": "esbuild app/main.tsx --bundle --outfile=dist/main.js",
+    "watch": "npm run build:app -- --watch",
+    "build": "npm run clean && npm run build:lib && npm run build:app && npm run html",
+    "html": "cp app/index.html dist/",
+    "lint": "eslint . --ext .ts,.tsx",
+    "clean": "rm -rf dist/* lib/*",
+    "test": "tsc --noEmit && npm run lint && npm run test:unit",
+    "test:unit": "esbuild --bundle --platform=node test/index.ts | node"
+  },
+  "author": "Matthew Brandly",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/assert": "1.5.6",
+    "@types/events": "3.0.0",
+    "@types/react": "17.0.30",
+    "@types/react-dom": "17.0.9",
+    "@types/styled-components": "5.1.15",
+    "@typescript-eslint/eslint-plugin": "5.30.6",
+    "@typescript-eslint/parser": "5.30.6",
+    "esbuild": "0.14.49",
+    "eslint": "8.19.0",
+    "eslint-plugin-jsx-a11y": "6.6.0",
+    "gh-pages": "3.2.3",
+    "nmp": "1.0.3",
+    "prettier": "2.4.1",
+    "react": "17.0.2",
+    "react-dom": "17.0.2",
+    "styled-components": "5.3.1",
+    "typescript": "4.7.4",
+    "uglify-js": "3.14.2"
+  },
+  "peerDependencies": {
+    "react": "^16.8.0 || ^17.0.0",
+    "react-dom": "^16.8.0 || ^17.0.0"
+  },
+  "homepage": "http://localhost/react-tetris/",
+  "files": [
+    "lib/"
+  ]
+}

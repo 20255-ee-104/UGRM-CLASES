@@ -1,0 +1,178 @@
+#
+#  Author: Hari Sekhon
+#  Date: [% DATE  # 2019-11-25 13:47:16 +0000 (Mon, 25 Nov 2019) %]
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn
+#  and optionally send me feedback to help improve or steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                                 S e r v i c e
+# ============================================================================ #
+
+# https://kubernetes.io/docs/concepts/services-networking/service/
+
+# https://kubernetes.io/docs/reference/kubernetes-api/service-resources/service-v1/
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: NAME
+  namespace: NAMESPACE
+  labels:
+    app: APP
+  #annotations:
+
+    # ============
+    # Metal LB
+    #
+    #   https://metallb.universe.tf/usage/#requesting-specific-ips
+    #
+    # if address-pool or loadBalancerIPs don't match an IPAddressPool then the service will stay in pending state
+    #
+    # # request an IP from a specific IPAddressPool
+    # metallb.universe.tf/address-pool: production-public-ips
+    #
+    # # assign a specific IP address eg. a public IPv4 address from your IPAddressPool configured with autoAssign:false
+    # metallb.universe.tf/loadBalancerIPs: 42.176.25.64/32
+
+    # ============
+    # GKE
+    #
+    # # https://cloud.google.com/kubernetes-engine/docs/how-to/internal-load-balancing
+    # #
+    # # https://cloud.google.com/load-balancing/docs/internal
+    # #
+    # # create GKE internal Load Balancer - available within VPC region
+    # networking.gke.io/load-balancer-type: Internal  # GKE 1.17+
+    # cloud.google.com/load-balancer-type: Internal   # GKE <= 1.16
+    # networking.gke.io/internal-load-balancer-allow-global-access: "true"  # GKE 1.17+ - allow routing from VPC networks in other regions, VPC peers etc.
+
+    # ============
+    # External DNS
+    #
+    # # https://github.com/kubernetes-sigs/external-dns/blob/master/docs/tutorials/aws.md#verify-externaldns-works-service-example
+    #
+    # # External DNS will look for this FQDN (comma separate for multiple)
+    # external-dns.alpha.kubernetes.io/hostname: NAME.DOMAIN.COM
+
+    # service.beta.kubernetes.io/aws-load-balancer-ssl-cert: arn:aws:acm:eu-west-2:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    # service.beta.kubernetes.io/aws-load-balancer-ssl-ports: https
+    # service.beta.kubernetes.io/aws-load-balancer-backend-protocol: http
+
+    # =======================
+    # Kong Ingress Controller
+    #
+    # # https://docs.konghq.com/kubernetes-ingress-controller/latest/references/annotations/#service-resource
+    #
+    # konghq.com/plugins: ratelimit-by-ip   # aggregate limit by IP from all routes when applied to the service instead of the ingress (kong route)
+    # konghq.com/strip-path: "true"         # strips the ingress /path before forwarding the request to the service
+    # konghq.com/path: /prepended-path      # prepends the URL path to each request Kong sends to this service
+    # konghq.com/override: my-kong-ingress  # KongIngress CRD applies full range of Kong settings to this service - deprecated, new versions should have native annotation settings
+    # konghq.com/protocol: https            # used between Kong ingress and service
+    #
+    # =======================
+    # HAProxy Ingress Controller
+    #
+    # # https://www.haproxy.com/documentation/kubernetes/latest/community/configuration-reference/service/
+    #
+    # haproxy.org/load-balance: leastconn  # default: roundrobin
+    #
+    # haproxy.org/check: "true"
+    # haproxy.org/check-http: /health
+    # haproxy.org/check-interval: 30s
+    # haproxy.org/timeout-check: 5s
+    #
+    # haproxy.org/cookie-persistence: mycookie
+    #
+    # haproxy.org/forwarded-for: "true"
+    #
+    # haproxy.org/pod-maxconn: "30"
+    # haproxy.org/server-ssl: "true"
+    # haproxy.org/ssl-passthrough: "true"
+
+spec:
+  type: ClusterIP   # default
+  #clusterIP: None  # headless service - returns all A records instead of round robin. Useful for seeding (eg. Cassandra, Elasticsearch), or Service Discovery where load balancing is not needed (eg. Jenkins / TeamCity server)
+  #type: NodePort
+  #type: LoadBalancer
+  #type: ExternalName
+  #externalName: NAME.DOMAIN.COM  # returns a CNAME pointing to NAME.DOMAIN.COM, as a cluster stable internal reference to an external resource which might change
+  #externalName: myservice.default.svc.cluster.local
+  selector:
+    app: APP
+    role: master
+    tier: backend
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+
+  # =======================
+  # NodePort / LoadBalancer
+
+  # External traffic policy routes NodePort requests only to pods on same node
+  #
+  #   https://cloud.google.com/kubernetes-engine/docs/how-to/service-parameters#externalTrafficPolicy
+  #
+  # - pros:
+  #   - NodePort is only opened on nodes containing the pod, essentially allowing pods to control which nodes the LoadBalanacer routes through via pod placement and LB healthchecks
+  #   - one less hop inside cluster
+  #   - pod receives client's IP (X-Forwarded-For is more useful if you're using Cloudflare Proxied protections for Layer 7 HTTP, or PROXY protocol header for Layer 4 TCP)
+  # - cons:
+  #   - can cause load imbalances between pods (which is why this is not the default)
+  # - not needed for HTTP(s) services using Ingress -> default ClusterIP services
+  #
+  # XXX: beware externalTrafficPolicy: Local may skip a hop on GKE going directly to a node with a pod via a health check, but if the healthcheck fails and it goes to a random node this could cause timeouts:
+  #
+  #   https://cloud.google.com/knowledge/kb/externaltrafficpolicy-cluster-works-but-local-doesn-t-000004708
+  #
+  #externalTrafficPolicy: Local
+  externalTrafficPolicy: Cluster  # default, distribute to all service endpoints (pods) inside cluster
+
+  # =============================
+  # 'type: LoadBalancer' settings
+
+#  sessionAffinity: ClientIP  # session stickyness
+#  sessionAffinityConfig:
+#    clientIP:
+
+  #
+  # set a static IP to reuse if recreated
+#  loadBalancerIP: x.x.x.x
+
+  # updates AWS / GKE firewall rules which default to inbound 0.0.0.0/0 otherwise
+  #               GKE k8s-fw-<hash>
+  #         AWS security group rule named k8s-elb-<hash>
+#  loadBalancerSourceRanges:
+#    # VPN / Office addresses etc...
+#    - x.x.x.x/32
+#    # Cloudflare Proxied IP ranges (only these are seen when running DNS records in fully Proxied mode)
+#    #                               client IPs become masked to these, use X-Forwarded-For in app, and
+#    #                               restrict Cloudflare Firewall for Dev/Staging environments to only VPN / Office / 3rd party webhook addresses
+#    #                               since otherwise all clients will go through your firewall and ingress as one of the below addresses
+#    # https://www.cloudflare.com/en-gb/ips/
+#    - 103.21.244.0/22
+#    - 103.22.200.0/22
+#    - 103.31.4.0/22
+#    - 104.16.0.0/12
+#    - 108.162.192.0/18
+#    - 131.0.72.0/22
+#    - 141.101.64.0/18
+#    - 162.158.0.0/15
+#    - 172.64.0.0/13
+#    - 173.245.48.0/20
+#    - 188.114.96.0/20
+#    - 190.93.240.0/20
+#    - 197.234.240.0/22
+#    - 198.41.128.0/17

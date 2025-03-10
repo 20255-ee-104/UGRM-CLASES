@@ -1,0 +1,59 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2021-06-09 15:49:46 +0100 (Wed, 09 Jun 2021)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#             A r g o C D   S e t t i n g s   U s e r s   P a t c h
+# ============================================================================ #
+
+# https://argo-cd.readthedocs.io/en/stable/operator-manual/user-management/
+
+# ArgoCD Local User Management
+#
+#   https://argoproj.github.io/argo-cd/operator-manual/user-management/
+
+# XXX: Check your UI login and CLI login works too before disabling admin:
+#
+#   argocd login $ARGOCD_HOST --sso --grpc-web
+
+# Apply like so:
+#
+#   run: kubectl patch configmap argocd-cm --namespace argocd --patch "$(cat cm.users.patch.yaml)"
+#
+# Check admin user is disabled via:
+#
+#   argocd account get --account admin
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+  namespace: argocd  # XXX: only use with Helm override, fails to match direct yaml install
+  #annotations:
+  #  checkov.io/skip1: CKV_K8S_21=breaks kustomize patching of base
+  labels:
+    app.kubernetes.io/name: argocd-cm
+    app.kubernetes.io/part-of: argocd  # necessary for configmap to be picked up my ArgoCD
+data:
+  #admin.enabled: "false"  # XXX: check your SSO works as documented in header before uncommenting to disable admin
+  accounts.admin: login, apiKey  # built-in admin account doesn't have apiKey permission by default
+
+  # create your user accounts like so and then update their passwords via:
+  #
+  #   argocd account update-password --account <name> --current-password <current-admin> --new-password <new-user-password>
+  #
+  #accounts.hari: login, apiKey
+  #accounts.hari.enabled: true  # default, set to false to disable account

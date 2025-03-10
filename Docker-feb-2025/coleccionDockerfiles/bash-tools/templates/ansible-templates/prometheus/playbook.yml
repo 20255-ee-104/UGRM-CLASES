@@ -1,0 +1,85 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2024-10-09 02:50:05 +0300 (Wed, 09 Oct 2024)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#
+#  https///github.com/HariSekhon/Ansible
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                              P r o m e t h e u s
+# ============================================================================ #
+
+---
+- name: Install Prometheus
+  hosts: all
+  become: yes
+  vars:
+    prometheus_version: "latest"  # Set to "latest" or specify a version
+    prometheus_bin: "/usr/local/bin/prometheus"
+    prometheus_config: "/etc/prometheus.yml"
+    prometheus_service: "/etc/systemd/system/prometheus.service"
+
+  tasks:
+    - name: Determine latest Prometheus version from GitHub releases if not specified
+      uri:
+        url: "https://api.github.com/repos/prometheus/prometheus/releases/latest"
+        method: GET
+        return_content: yes
+      register: latest_release
+      when: prometheus_version == "latest"
+
+    - name: Check if latest_release has valid content
+      assert:
+        that:
+          - latest_release is defined
+          - latest_release.json is defined
+          - latest_release.json.tag_name is defined
+        fail_msg: "Failed to fetch latest release data or the expected structure is not found"
+
+    - name: Set version variable
+      set_fact:
+        prometheus_version: "{{ latest_release.json.tag_name }}"
+      when: prometheus_version == "latest"
+
+    - name: Download Prometheus
+      get_url:
+        url: "https://github.com/prometheus/prometheus/releases/download/{{ prometheus_version }}/prometheus-{{ prometheus_version }}.linux-amd64.tar.gz"
+        dest: /tmp/prometheus.tar.gz
+
+    - name: Unpack Prometheus tarball
+      unarchive:
+        src: /tmp/prometheus.tar.gz
+        dest: /tmp/
+        remote_src: yes
+
+    - name: Copy Prometheus binary to /usr/local/bin
+      copy:
+        src: "/tmp/prometheus-{{ prometheus_version }}/prometheus"
+        dest: "{{ prometheus_bin }}"
+        mode: '0755'
+
+    - name: Copy Prometheus configuration file
+      copy:
+        src: "{{ playbook_dir }}/prometheus.yml"
+        dest: "{{ prometheus_config }}"
+        mode: '0644'
+
+    - name: Copy Prometheus service file
+      copy:
+        src: "{{ playbook_dir }}/prometheus.service"
+        dest: "{{ prometheus_service }}"
+        mode: '0644'
+
+    - name: Start and enable Prometheus service
+      systemd:
+        name: prometheus
+        state: started
+        enabled: yes

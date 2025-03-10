@@ -1,0 +1,78 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2021-03-09 11:26:47 +0000 (Tue, 09 Mar 2021)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# Enhances the default nginx ingress controller deployment from:
+#
+#   https://kubernetes.github.io/ingress-nginx/deploy/
+#
+
+---
+# Source: ingress-nginx/templates/controller-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingress-nginx-controller
+  namespace: ingress-nginx
+spec:
+  replicas: 3
+  template:
+    spec:
+      # XXX: give priority scheduling to stable node pool. Requires: priorityclass.yaml
+      priorityClassName: high-priority
+      # https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#affinity-and-anti-affinity
+      # XXX: not recommended in clusters greater than several hundred nodes due to significant CPU overhead slowing down scheduling
+      affinity:
+        nodeAffinity:
+          # XXX: prefer non-preemptible VMs unless unavailable
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  # gke-preemptible not valid on GKE AutoPilot clusters - remove in that case and leave only gke-spot
+                  - key: cloud.google.com/gke-preemptible
+                    operator: DoesNotExist
+                  - key: cloud.google.com/gke-spot
+                    operator: DoesNotExist
+        podAntiAffinity:
+          # XXX: use preferred if num_replicas > num_AZs
+#          preferredDuringSchedulingIgnoredDuringExecution:
+#            - weight: 100
+#              podAffinityTerm:
+#                # XXX: spread ingress pods across AZs for resilience
+#                topologyKey: topology.kubernetes.io/zone
+#                labelSelector:
+#                  matchExpressions:
+#                    - key: app.kubernetes.io/name
+#                      operator: In
+#                      values:
+#                        - ingress-nginx
+          requiredDuringSchedulingIgnoredDuringExecution:
+            # XXX: spread ingress pods across AZs for resilience
+            - topologyKey: topology.kubernetes.io/zone
+              labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - ingress-nginx
+              # XXX: spread ingress pods across hosts (default prefers spread, whereas this requires it)
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - ingress-nginx

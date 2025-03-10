@@ -1,0 +1,60 @@
+#
+#  Author: Hari Sekhon
+#  Date: [% DATE  # 2019-11-28 18:17:27 +0000 (Thu, 28 Nov 2019) %]
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn
+#  and optionally send me feedback to help improve or steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                     P o d   S e c u r i t y   P o l i c y
+# ============================================================================ #
+
+# XXX: deprecated in Kubernetes 1.21, removed in Kubernetes 1.25
+
+# https://kubernetes.io/blog/2021/04/06/podsecuritypolicy-deprecation-past-present-and-future/
+
+# https://kubernetes.io/docs/tasks/configure-pod-container/migrate-from-psp/
+
+# https://kubernetes.io/docs/concepts/security/pod-security-standards/
+
+# ============================================================================ #
+
+# https://kubernetes.io/docs/concepts/policy/pod-security-policy/
+
+# https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
+
+# https://github.com/kubernetes/examples/blob/master/staging/podsecuritypolicy/rbac/README.md
+
+# https://docs.openshift.com/online/pro/rest_api/policy/podsecuritypolicy-policy-v1beta1.html
+
+---
+apiVersion: policy/v1
+kind: PodSecurityPolicy
+metadata:
+  name: noprivpods
+  namespace: NAMESPACE
+# kics-scan ignore-block
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  defaultAllowPrivilegeEscalation: false
+  seLinux:
+    rule: RunAsAny
+  supplementalGroups:
+    rule: RunAsAny
+  runAsUser:
+    rule: MustRunAsNonRoot
+  fsGroup:
+    rule: RunAsAny
+  volumes:
+    - '*'

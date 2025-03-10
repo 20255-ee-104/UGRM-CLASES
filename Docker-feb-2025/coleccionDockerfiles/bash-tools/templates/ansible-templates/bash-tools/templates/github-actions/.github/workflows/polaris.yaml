@@ -1,0 +1,78 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2021-11-30 18:55:57 +0000 (Tue, 30 Nov 2021)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#
+#  https://github.com/HariSekhon/GitHub-Actions
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                                 P o l a r i s
+# ============================================================================ #
+
+# Audit may fail on repos with JSON patches such as https://github.com/HariSekhon/Kubernetes-configs:
+#
+#   https://github.com/FairwindsOps/polaris/issues/667
+#
+#   and can't exclude files:
+#
+#     https://github.com/FairwindsOps/polaris/issues/670
+#
+# the better solution is to run Polaris inside Kubernetes, see polaris*.yaml in:
+#
+#   https://github.com/HariSekhon/Kubernetes-configs
+
+---
+name: Polaris
+
+on:
+  workflow_call:
+    inputs:
+      debug:
+        type: string
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash -euxo pipefail {0}
+
+env:
+  DEBUG: ${{ inputs.debug == true || github.event.inputs.debug == 'true' || '' }}
+
+jobs:
+  polaris:
+    runs-on: ubuntu-latest
+    #container: quay.io/fairwinds/polaris:4.0.7
+    steps:
+      - name: Environment
+        run: env | sort
+
+      - uses: actions/checkout@v3
+
+      #- name: Polaris Audit
+      #  uses: fairwindsops/polaris@master
+      #  with:
+      #    #version: 4.0.7
+      #    args: polaris audit --audit-path . -f pretty --only-show-failed-tests
+
+      - name: Download Polaris
+        uses: fairwindsops/polaris/.github/actions/setup-polaris@master
+        with:
+          version: 5.0.0  # omitting this fails to download from latest
+
+      - name: Polaris version
+        run: polaris version
+
+      - name: Polaris Audit
+        run: polaris audit --audit-path . -f pretty --only-show-failed-tests

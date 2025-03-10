@@ -1,0 +1,53 @@
+#  vim:ts=2:sts=2:sw=2:et
+#
+#  Author: Hari Sekhon
+#  Date: [% DATE # 2016-12-08 16:53:29 +0000 (Thu, 08 Dec 2016) %]
+#
+#  [% URL %]
+#
+#  [% LICENSE %]
+#
+#  [% MESSAGE %]
+#
+#  [% LINKEDIN %]
+#
+
+# https://docs.docker.com/compose/compose-file/compose-file-v3/
+
+# Docker 1.12.0+
+# format 2.1 enables ${VAR:-default}
+# Docker 1.13.0+
+# format 2.2 enables user
+
+---
+version: '3.9'
+
+services:
+  #[% NAME %]:
+  NAME:
+    # XXX: for Dockerfiles only, remove otherwise
+    build:
+      context: .
+      args:
+        - nocache
+    #extends:
+    #  file: common.yml
+    #  service: common
+    image: harisekhon/[% NAME %]:${VERSION:-latest}
+    ports:
+      # host:container
+      - "8080:80"
+    volumes:
+      - .:/code
+      #-logvolume01:/var/log
+    #links:
+    #  - redis
+    read_only: true
+    # if app has to write to local path
+    #tmpfs:
+    #  - /var/run
+    #  - /var/cache
+    security_opt:
+      - no-new-privileges:true
+#volumes:
+#  logvolume01: {}

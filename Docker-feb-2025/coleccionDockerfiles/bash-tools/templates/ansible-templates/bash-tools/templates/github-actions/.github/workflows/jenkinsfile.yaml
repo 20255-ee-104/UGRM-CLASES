@@ -1,0 +1,117 @@
+#
+#  Author: Hari Sekhon
+#  Date: Thu Jan 20 16:01:19 2022 +0000
+#
+#  vim:ts=2:sts=2:sw=2:et
+#
+#  https://github.com/HariSekhon/GitHub-Actions
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# Designed to validate the master Jenkinsfile in my Jenkins repo:
+#
+#   https://github.com/HariSekhon/Jenkins
+
+---
+name: Jenkinsfile Validation
+
+on:
+  workflow_call:
+    inputs:
+      plugins:
+        description: List of Jenkins plugins that need to be installed to validate the Jenkinsfile
+        type: string
+        default: '' # kubernetes:1.31.2
+        required: false
+      debug:
+        type: string
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash -euxo pipefail {0}
+
+env:
+  PLUGINS_TO_INSTALL: ${{ inputs.plugins }}
+# doesn't get set, as GITHUB_ prefix not being allowed
+#  GITHUB_WORKSPACE: /var/jenkins_home
+  DEBUG: ${{ inputs.debug == true || github.event.inputs.debug == 'true' || '' }}
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    #container: harisekhon/jenkins:latest
+    container: jenkins/jenkins:lts
+    steps:
+      - name: Environment
+        run: env | sort
+
+      # Workaround for actions/checkout not being able to checkout outside of $GITHUB_WORKSPACE and not being able to set GITHUB_WORKSPACE
+      #
+      #   https://github.com/actions/checkout/issues/197
+      #
+      # can't set GITHUB_WORKSPACE to path: /var/_jenkins_home outside of it due to actions/checkout validation
+      #
+      #- uses: actions/checkout@v3
+      #  with:
+      #    submodules: recursive  # requires Git 2.18+ to be installed first
+      #
+      #- uses: actions/checkout@v3
+      #  with:
+      #    repository: HariSekhon/DevOps-Bash-tools
+      #    #ref: master         # unset for default branch in case it changes in future
+      #    #submodules: recursive  # don't need the submodules for just this script, save time
+      #    path: bash-tools
+
+      - name: Git Checkout
+        run: |
+          git --version
+          cd "$JENKINS_HOME"
+          git clone "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" repo
+          cd repo
+          git checkout -f "$GITHUB_SHA"
+
+      - name: Git Checkout Bash Tools
+        run: |
+          cd "$JENKINS_HOME"
+          git clone "$GITHUB_SERVER_URL/HariSekhon/DevOps-Bash-tools" bash-tools
+
+      # Whatever constructs you want to validate in Jenkinsfile must have the corresponding plugins installed
+      - name: Jenkins Install Plugins
+        run: |
+          /bin/jenkins-plugin-cli --plugins \
+            $(cat <<-EOF
+                ansicolor:1.0.1
+                lockable-resources:2.13
+                ssh-agent:1.23
+                timestamper:1.16
+                workflow-aggregator:2.6
+                $(tr '\n' ' ' <<< "${{ env.PLUGINS_TO_INSTALL }}")
+          EOF
+            )
+        timeout-minutes: 10
+
+      - name: Start Jenkins
+        run: /usr/local/bin/jenkins.sh &
+        timeout-minutes: 1
+
+      - name: Wait for Jenkins Initial Password
+        run: while ! [ -f "$JENKINS_HOME/secrets/initialAdminPassword" ]; do sleep 1; done
+        timeout-minutes: 10
+
+      - name: Wait for Jenkins to initialize
+        run: while ! curl -sSf http://localhost:8080/login | grep -qi jenkins; do sleep 1; done
+        timeout-minutes: 10
+
+      - name: Validate Jenkinsfiles
+        run: |
+          cd "$JENKINS_HOME/repo"
+          ../bash-tools/checks/check_jenkinsfiles.sh

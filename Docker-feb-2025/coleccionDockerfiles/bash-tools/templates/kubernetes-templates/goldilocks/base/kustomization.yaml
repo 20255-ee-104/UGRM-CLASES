@@ -1,0 +1,95 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2021-11-22 11:54:55 +0000 (Mon, 22 Nov 2021)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                G o l d i l o c k s   K u s t o m i z a t i o n
+# ============================================================================ #
+
+# Ties together the Goldilocks controller and dashboard for ArgoCD deployments since ArgoCD doesn't recurse these directories and also the manifests from Goldilocks doesn't include the namespace or label
+
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: goldilocks  # XXX: 5 objects without explicit namespace as shown by kustomize_check_objects_namespaces.sh in the adjacent DevOps Bash tools repo
+
+# done in namespace yaml now
+#patchesStrategicMerge:
+  #- goldilocks-namespace-enable.patch.yaml
+
+resources:
+  - namespace.yaml
+  # XXX: Edit ingress address before uncommenting
+  #- goldilocks-ingress.yaml
+  #
+  # versioned stable copy (commit to vcs):
+  #
+  #   helm_template.sh https://charts.fairwinds.com/stable fairwinds-stable/goldilocks --version 4.0.2 -f goldilocks-values.yaml > helm.yaml
+  #
+  #- helm.yaml
+
+# dynamic versioned:
+helmCharts:
+  - name: goldilocks
+    repo: https://charts.fairwinds.com/stable
+    version: 8.0.1
+    releaseName: goldilocks
+    namespace: goldilocks
+    includeCRDs: true
+    valuesFile: values.yaml
+
+
+# ============================================================================ #
+# Old
+#
+# Prefer Helm values + override above instead of this:
+#
+# Manifests below are from:
+#
+#   git clone https://github.com/FairwindsOps/goldilocks.git
+#   cd goldilocks
+#   cp -a hacks/manifests/* .
+#
+# as per:
+#
+#   https://goldilocks.docs.fairwinds.com/installation/#installation-2
+#
+# Lack of globbing support sucks:
+#
+#   - controller/*.yaml
+#   - dashboard/*.yaml
+#
+#       https://github.com/kubernetes-sigs/kustomize/issues/3205
+#
+#   even the kustomize edit workaround his this bug, which upgrade to Kustomize 4.4.1 solved:
+#
+#     for x in controller/*.yaml dashboard/*.yaml; do kustomize edit add resource "$x"; done
+#
+#       https://github.com/kubernetes-sigs/kustomize/issues/4304
+#
+# Workaround (also good because it doesn't strip your comments out of the kustomization.yaml):
+#
+#   ls */*.yaml | sed 's/^/- /' >> kustomization.yaml
+#
+#resources:
+#  - controller/clusterrole.yaml
+#  - controller/clusterrolebinding.yaml
+#  - controller/deployment.yaml
+#  - controller/serviceaccount.yaml
+#  - dashboard/clusterrole.yaml
+#  - dashboard/clusterrolebinding.yaml
+#  - dashboard/deployment.yaml
+#  - dashboard/service.yaml
+#  - dashboard/serviceaccount.yaml

@@ -1,0 +1,62 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2021-04-21 10:52:12 +0100 (Wed, 21 Apr 2021)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#          A r g o C D   K u s t o m i z e   V e r s i o n   P a t c h
+# ============================================================================ #
+
+# https://argo-cd.readthedocs.io/en/stable/user-guide/kustomize/
+
+# Patch ArgoCD repo server to download an specific version of Kustomize with which to generate manifests
+
+# Apply:
+#
+#   run: kubectl patch deployment argocd-repo-server --namespace argocd --patch "$(cat repo-server.kustomize.patch.yaml)"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-repo-server
+  annotations:
+    checkov.io/skip1: CKV_K8S_21=breaks kustomize patching of base
+  namespace: argocd  # breaks kustomize patching of argocd base if using url based install rather than helm, see cm.repos.patch.yaml for details why
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: download-tools
+          image: alpine:3.8
+          command: [sh, -c]
+          env:
+            # XXX: Edit Kustomize version here
+            - name: KUSTOMIZE_VERSION
+              value: 4.5.7  # needs to be fairly recent to bypass error 'unknown field "includeCRDs"' when combining Kustomize + Helm with includeCRDs option seen in adjacent *-kustomization.yaml
+          args:
+            - wget -qO- https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv$(KUSTOMIZE_VERSION)/kustomize_v$(KUSTOMIZE_VERSION)_linux_amd64.tar.gz | tar -xvzf - &&
+              mv kustomize /custom-tools/
+          volumeMounts:
+            - mountPath: /custom-tools
+              name: custom-tools
+      containers:
+        - name: argocd-repo-server
+          volumeMounts:
+            - mountPath: /usr/local/bin/kustomize
+              name: custom-tools
+              subPath: kustomize
+      volumes:
+        - emptyDir: {}
+          name: custom-tools

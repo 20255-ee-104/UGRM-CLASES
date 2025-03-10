@@ -1,0 +1,211 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2021-06-11 11:35:45 +0100 (Fri, 11 Jun 2021)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                    A r g o C D   K u s t o m i z a t i o n
+# ============================================================================ #
+
+# initial admin password:
+#
+#   kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode
+
+# run: argocd app sync argocd --local $PWD --dry-run
+
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: argocd
+
+# XXX: bases are deprecated and 'kustomize edit' will remove them and add them to the bottom of the resources section, messing up your ordering, so put straight into the top of resources now
+#
+# Add resources from a URL - notice this is not the same as the browse path which is https://github.com/argoproj/argo-cd/tree/master/manifests/cluster-install
+#bases:                      # // is intentional to only copy from this path down
+#- github.com/argoproj/argo-cd//manifests/cluster-install?ref=v2.0.3
+#
+# but // causes this error in Kustomize 3.5 (the repo-server.kustomize.patch.yaml upgrades Kustomize and should fix this too):
+#
+#     Error: accumulating resources: accumulateFile "accumulating resources from 'github.com/argoproj/argo-cd//manifests/cluster-install?ref=v2.0.3': evalsymlink failure on '/tmp/git@repo/argocd/overlay/github.com/argoproj/argo-cd/manifests/cluster-install?ref=v2.0.3' : lstat /tmp/git@repo/argocd/overlay/github.com: no such file or directory", accumulateDirector: "recursed accumulation of path '/tmp/kustomize-881686007/repo': accumulating resources: accumulateFile \"accumulating resources from '../namespace-install': evalsymlink failure on '/tmp/kustomize-881686007/namespace-install' : lstat /tmp/kustomize-881686007/namespace-install: no such file or directory\", loader.New \"Error loading ../namespace-install with git: url lacks host: ../namespace-install, dir: evalsymlink failure on '/tmp/kustomize-881686007/namespace-install' : lstat /tmp/kustomize-881686007/namespace-install: no such file or directory, get: invalid source string: ../namespace-install\""
+#
+# so keep it simple, this works:
+#- github.com/argoproj/argo-cd/manifests/cluster-install?ref=v2.0.3
+
+# or integrate the newer helm chart:
+#
+#   https://github.com/argoproj/argo-helm/tree/master/charts/argo-cd
+#
+# (see kustomization.yaml for how to do this)
+#
+resources:
+  #- https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+  #- https://raw.githubusercontent.com/argoproj/argo-cd/v2.10.0/manifests/ha/install.yaml
+  - namespace.yaml
+
+  # XXX: moved to overlay as likely to need different paths per environment
+  #
+  #- self.yaml      # GitOps self-management tracking of ArgoCD config itself
+  #- projects.yaml  # auto-loads projects under projects/
+  #- apps.yaml      # auto-loads applications under apps/
+  # XXX: Edit ingress address before uncommenting
+  #- ingress.yaml
+  # XXX: Edit ingress address before uncommenting
+  #- ingress-grpc.yaml
+
+  #- clusters-secrets.yaml
+  #- repos-secrets.yaml
+  #
+  # XXX: simpler solution if using this for Kustomize External Bases, if using the same repo, is ensure the app is set to use the https://github.com url instead of the git@github.com address
+  #- git-askpass.configmap.yaml
+
+helmCharts:
+  - name: argo-cd
+    repo: https://argoproj.github.io/argo-helm
+    version: 5.54.0
+    releaseName: argocd
+    namespace: argocd
+    includeCRDs: true
+    valuesFile: values.yaml
+
+# XXX: don't define namespace in these patches if installed from url rather than helm, will break patching, see cm.repos.patch.yaml for details why
+patches:
+  # Repos:
+  #
+  #- path: cm.repos.patch.yaml
+  #
+  # Bugfix for GitHub updating its security keys, more details in the patch
+  #- path: ssh-known-hosts-cm.patch.yaml
+  #
+  # Kustomize - download specific version:
+  #
+  #- repo-server.kustomize.patch.yaml
+  - path: cm.kustomize-buildoptions.patch.yaml
+  #
+  #- path: cm.resource-exclusions.patch.yaml
+  #
+  # Azure AD SSO patches:
+  #
+  #- path: cm.azure-ad.patch.yaml
+  #- path: cm.users.patch.yaml
+  #- path: rbac-cm.patch.yaml
+  #- path: azure-ad-external-secret.yaml  # XXX: Edit this if uncommenting
+  #
+  # GitHub Webhook Secret:
+  #
+  #- path: secret.github-webhook.patch.yaml
+  #
+  # Status Badge:
+  #
+  #- path: cm.statusbadge.patch.yaml
+  #
+  # done in namespace.yaml
+  #- path: goldilocks-namespace-enable.patch.yaml
+  - target:
+      version: argoproj.io/v1alpha1
+      kind: AppProject
+      name: default
+    path: project-default.patch.yaml
+# ArgoCD doesn't come with default resources - https://github.com/argoproj/argo-cd/issues/7772
+# Only need resource overrides for remote base yaml install, Helm chart has direct support for Resource settings - see values.yaml instead
+#  # XXX: seems missing from newer 2.1 HA install but this matching is silently ignored
+#  - path: resources.argocd-application-controller.jsonpatch.yaml
+#    target:
+#      name: argocd-application-controller
+#      kind: StatefulSet
+#      group: apps
+#      version: v1
+#  - path: resources.argocd-applicationset-controller.jsonpatch.yaml
+#    target:
+#      name: argocd-applicationset-controller
+#      kind: Deployment
+#      group: apps
+#      version: v1
+#  - path: resources.argocd-dex-server.jsonpatch.yaml
+#    target:
+#      name: argocd-dex-server
+#      kind: Deployment
+#      group: apps
+#      version: v1
+#  - path: resources.argocd-notifications-controller.jsonpatch.yaml
+#    target:
+#      name: argocd-notifications-controller
+#      kind: Deployment
+#      group: apps
+#      version: v1
+#  # XXX: not present in 2.1 HA install but silently ignored
+#  - path: resources.argocd-redis.jsonpatch.yaml
+#    target:
+#      name: argocd-redis
+#      kind: Deployment
+#      group: apps
+#      version: v1
+#  # XXX: only present in HA install
+#  - path: resources.argocd-redis-ha-haproxy.jsonpatch.yaml
+#    target:
+#      name: argocd-redis-ha-haproxy
+#      kind: Deployment
+#      group: apps
+#      version: v1
+#  - path: resources.argocd-redis-ha-server.jsonpatch.yaml
+#    target:
+#      name: argocd-redis-ha-server
+#      kind: StatefulSet
+#      group: apps
+#      version: v1
+#  - path: resources.argocd-repo-server.jsonpatch.yaml
+#    target:
+#      name: argocd-repo-server
+#      kind: Deployment
+#      group: apps
+#      version: v1
+#  - path: resources.argocd-server.jsonpatch.yaml
+#    target:
+#      name: argocd-server
+#      kind: Deployment
+#      group: apps
+#      version: v1
+
+# ArgoCD default project can't be modified via Kustomize because it is not in the remote base objects
+#patchesJson6902:
+#  - target:
+#      version: argoproj.io/v1alpha1
+#      kind: AppProject
+#      name: default
+#    path: project-default.jsonpatch.yaml
+
+# XXX: disable ArgoCD + Apps auto-sync, then click to disable the auto-sync on a specific app for development out of working directory, eg. using Skaffold
+#patchesJson6902:
+#  - target:
+#      group: argoproj.io
+#      version: v1alpha1
+#      kind: Application
+#      name: argocd
+#      namespace: argocd
+#    path: disable-autosync.jsonpatch.yaml
+#  - target:
+#      group: argoproj.io
+#      version: v1alpha1
+#      kind: Application
+#      name: apps
+#      namespace: argocd
+#    path: disable-autosync.patch.yaml
+
+# XXX: disable autosync for all apps while doing development eg. with Skaffold - you probably want the more targeted approach above
+#patches:
+#  - path: disable-autosync.patch.yaml
+#    target:
+#      group: argoproj.io
+#      version: v1alpha1
+#      kind: Application
+#      namespace: argocd

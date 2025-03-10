@@ -1,0 +1,177 @@
+#!/usr/bin/env bash
+#  vim:ts=4:sts=4:sw=4:et
+#
+#  Author: Hari Sekhon
+#  Date: Mon Feb 22 17:42:01 2021 +0000
+#
+#  https://github.com/HariSekhon/DevOps-Bash-tools
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#                              G C P   D i r E n v
+# ============================================================================ #
+
+# https://direnv.net/man/direnv-stdlib.1.html
+
+# See Also:
+#
+#   .envrc
+#   .envrc-aws
+#   .envrc-kubernetes
+
+# direnv stdlib - loads .envrc from parent dir up to /
+#
+# useful to accumulate parent and child directory .envrc settings eg. adding Kubernetes namespace, ArgoCD app etc.
+#
+# bypasses security authorization though - use with care
+#source_up
+#
+# source_up must be loaded before set -u otherwise gets this error:
+#
+#   direnv: loading .envrc
+#   /bin/bash: line 226: $1: unbound variable
+
+set -euo pipefail
+[ -n "${DEBUG:-}" ] && set -x
+srcdir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [ -n "${CI:-}" ]; then
+    exit 0
+fi
+
+# https://cloud.google.com/sdk/gcloud/reference/config
+
+# If using other services, infer the environment variables to put below by reading:
+#
+#   gcloud topic configurations
+#       or
+#   gcloud config set --help
+
+gcloud_config(){
+    local config="${1:-}"
+    if [ -z "$config" ]; then
+        echo "no config passed to gcloud_config() function" >&2
+        return 1
+    fi
+    if [ -z "${CI:-}" ]; then
+        return
+    fi
+    # don't waste time if not using GCloud SDK, ie. not found in $PATH
+    if type -P gcloud; then
+        # protect from setting this if the config does exist as this can cause auth problems by unsetting the core.account
+        if gcloud config configurations list --format='get(name)' | grep -q "^$config$"; then
+            export CLOUDSDK_ACTIVE_CONFIG_NAME="$config"
+        fi
+    fi
+}
+
+#gcloud_config dev
+#gcloud_config staging
+#gcloud_config production
+
+# XXX: Edit
+export CLOUDSDK_CORE_PROJECT=myproject
+
+echo "CLOUDSDK_CORE_PROJECT=$CLOUDSDK_CORE_PROJECT"
+echo
+
+# XXX: Edit
+export CLOUDSDK_COMPUTE_REGION="${CLOUDSDK_COMPUTE_REGION:-eu-west-2}"
+
+echo "CLOUDSDK_COMPUTE_REGION=$CLOUDSDK_COMPUTE_REGION"
+echo
+
+REGION="$CLOUDSDK_COMPUTE_REGION"
+
+# you should probably not set CLOUDSDK_COMPUTE_ZONE
+#
+# 'gcloud compute ssh' will auto-determine the zone
+#
+# setting CLOUDSDK_COMPUTE_ZONE explicitly breaks the above command in 2/3 cases due to a VM being in a different zone:
+#
+#    ERROR: (gcloud.compute.ssh) Could not fetch resource:
+#     - The resource 'projects/<MY_PROJECT>/zones/<ZONE>/instances/<VM_NAME>' was not found
+#
+# gcp/gce_ssh.sh script in this repo can work around that if you do set this
+#
+#export CLOUDSDK_COMPUTE_ZONE="${REGION}-a" # or b or c
+
+export CLOUDSDK_AI_REGION="$REGION"
+export CLOUDSDK_AI_PLATFORM_REGION="$REGION"
+export CLOUDSDK_DATAPROC_REGION="$REGION"
+export CLOUDSDK_DEPLOY_REGION="$REGION"
+export CLOUDSDK_FILESTORE_REGION="$REGION"
+export CLOUDSDK_FUNCTIONS_REGION="$REGION"
+export CLOUDSDK_MEMCACHE_REGION="$REGION"
+export CLOUDSDK_REDIS_REGION="$REGION"
+export CLOUDSDK_RUN_REGION="$REGION"
+export CLOUDSDK_RUN_CLUSTER_LOCATION="$REGION"
+export CLOUDSDK_VMWARE_REGION="$REGION"
+
+# XXX: Edit
+export CLOUDSDK_RUN_PLATFORM=managed
+#export CLOUDSDK_RUN_PLATFORM=gke
+#export CLOUDSDK_RUN_PLATFORM=kubernetes
+#export CLOUDSDK_RUN_CLUSTER=mycluster
+
+export CLOUDSDK_GCLOUDIGNORE_ENABLED=True
+#export CLOUDSDK_BUILDS_USE_KANIKO=True
+
+# XXX: Edit, or remove if only have 1 cluster in project, will auto-determine below
+export CLOUDSDK_CONTAINER_CLUSTER=mycluster  # GKE cluster name
+
+# safer but slower
+#gke_clusters=()
+#while IFS='' read -r line; do
+#    gke_clusters+=("$line")
+#done < <(gcloud container clusters list --format='get(name)')
+#if [ "${#gke_clusters[@]}" -eq 1 ]; then
+#    export CLOUDSDK_CONTAINER_CLUSTER="${gke_clusters[*]}"
+#fi
+
+gke_clusters="$(
+    gcloud container clusters list --format='get(name)' |
+    sed '/^[[:space:]]*$/d'
+)"
+
+if [ -n "$gke_clusters" ]; then
+    num_gke_clusters="$(grep -c . <<< "$gke_clusters")"
+    echo "GKE Clusters ($num_gke_clusters):"
+    echo
+    echo "$gke_clusters"
+    echo
+    # If GKE_CLUSTER isn't set and there is only one GKE cluster in this account and region, then use it
+    if [ -z "${GKE_CLUSTER:-}" ]; then
+        if [ "$num_gke_clusters" = 1 ]; then
+            GKE_CLUSTER="$gke_clusters"
+        fi
+    fi
+else
+    num_gke_clusters=0
+fi
+
+# alternatively call gke_kube_context() function in .envrc-kubernetes which will do this
+# and comment out auto-running kube_context() on sourcing .envrc-kubernetes
+if [ -n "${CLOUDSDK_CONTAINER_CLUSTER:-}" ]; then
+    echo "CLOUDSDK_CONTAINER_CLUSTER=$CLOUDSDK_CONTAINER_CLUSTER"
+    echo
+    # kubectl context is easily created by running adjacent aws_kube_creds.sh script first
+
+    export GKE_CONTEXT="gke_${CLOUDSDK_CORE_PROJECT}_${CLOUDSDK_COMPUTE_REGION}_${CLOUDSDK_CONTAINER_CLUSTER}"
+
+    # XXX: safer to inline .envrc-kubernetes if you're worried about changes to it bypassing 'direnv allow' authorization
+    # shellcheck disable=SC1090,SC1091
+    . "$srcdir/.envrc-kubernetes" "$GKE_CONTEXT" ${GKE_NAMESPACE:+"$GKE_NAMESPACE"}
+fi
+
+# pull the secret using this command whenever you need it:
+#
+#   gcp_secret_get.sh "$JENKINS_ADMIN_PASSWORD_GCP_SECRET" | copy_to_clipboard.sh
+#
+export JENKINS_ADMIN_PASSWORD_GCP_SECRET="jenkins-admin-password"

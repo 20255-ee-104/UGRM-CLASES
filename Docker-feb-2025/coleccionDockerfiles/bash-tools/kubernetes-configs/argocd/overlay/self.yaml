@@ -1,0 +1,46 @@
+#
+#  Author: Hari Sekhon
+#  Date: 2021-06-10 10:35:49 +0100 (Thu, 10 Jun 2021)
+#
+#  vim:ts=2:sts=2:sw=2:et
+#  lint: k8s
+#
+#  https://github.com/HariSekhon/Kubernetes-configs
+#
+#  License: see accompanying Hari Sekhon LICENSE file
+#
+#  If you're using my code you're welcome to connect with me on LinkedIn and optionally send me feedback to help steer this or other code I publish
+#
+#  https://www.linkedin.com/in/HariSekhon
+#
+
+# ============================================================================ #
+#           A r g o C D   G i t O p s   S e l f   M a n a g e m e n t
+# ============================================================================ #
+
+# manages ArgoCD itself via GitOps tracking and updating from ArgoCD configs in given Git repo
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd
+  namespace: argocd  # must be whichever namespace you installed ArgoCD to - usually 'argocd' by default
+spec:
+  project: default
+  source:
+    # XXX: Edit
+    repoURL: https://github.com/HariSekhon/Kubernetes-configs.git  # keep .git suffix for GitLab, otherwise it'll 301 redirect which ArgoCD doesn't follow
+    targetRevision: HEAD  # branch / tag / SHA commit
+    # XXX: Edit
+    path: dir/path/to/k8s/manifests
+  destination:
+    server: https://kubernetes.default.svc  # in-cluster URL
+    #name: in-cluster
+    namespace: argocd  # should be same as namespace above
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: false
+    syncOptions:
+      - ApplyOutOfSyncOnly=false  # true is quicker but doesn't record history, cannot rollback, and hooks aren't run
