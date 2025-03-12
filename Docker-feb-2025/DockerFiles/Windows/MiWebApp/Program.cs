@@ -5,6 +5,6 @@ builder.WebHost.UseUrls("http://0.0.0.0:8080");
 
 var app = builder.Build();
 
-app.MapGet("/", () => "¡Hola Mundo desde Docker Multistage!");
+app.MapGet("/", () => "¡Hola lunes 10 de marzo");
 
 app.Run();
