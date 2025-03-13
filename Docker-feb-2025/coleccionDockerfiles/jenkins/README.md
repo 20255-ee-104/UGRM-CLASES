@@ -90,3 +90,73 @@ docker run -d -p 8080:8080 -p 50000:50000 \
 5️⃣ **(Opcional) Usar volumen para persistencia** con `-v jenkins_home:/var/jenkins_home`
 
 docker exec -it my-jenkins cat /var/jenkins_home/secrets/initialAdminPassword
+
+
+
+# Azure Container Registry (ACR) - Deploying a Custom Nginx Container
+
+## 🚀 Objective
+This guide walks you through:
+1. Creating an **Azure Container Registry (ACR)**.
+2. Building a **custom Nginx container with a custom HTML page**.
+3. Pushing the image to **myacrdemo01.azurecr.io**.
+4. Deploying the container on **Azure Container Instances (ACI)**.
+
+---
+
+## **📌 Quick Summary**
+1️⃣ **Create the `Dockerfile`** and copy the content.  
+2️⃣ **Build the image** with:
+   ```sh
+   docker build -t jenkins-custom .
+   ```
+3️⃣ **Run Jenkins locally**:
+   ```sh
+   docker run -d -p 8080:8080 -p 50000:50000 --name my-jenkins jenkins-custom
+   ```
+4️⃣ **View the Jenkins admin password**:
+   ```sh
+   docker logs my-jenkins
+   ```
+5️⃣ **(Optional) Use a volume for persistence**:
+   ```sh
+   docker run -d -p 8080:8080 -p 50000:50000 --name my-jenkins \
+      -v jenkins_home:/var/jenkins_home jenkins-custom
+   ```
+6️⃣ **Tag and Push the image to Azure Container Registry (ACR):**
+   ```sh
+   docker tag jenkins-custom myacrdemo01.azurecr.io/jenkins-custom:v1
+   docker push myacrdemo01.azurecr.io/jenkins-custom:v1
+   ```
+7️⃣ **Deploy the container to Azure Container Instances (ACI):**
+   ```sh
+   az container create \
+     --resource-group ACRDemoRG \
+     --name my-jenkins-container \
+     --image myacrdemo01.azurecr.io/jenkins-custom:v1 \
+     --dns-name-label myjenkinsdemo \
+     --ports 8080 50000
+   ```
+8️⃣ **Get the Public URL of the Jenkins container:**
+   ```sh
+   az container show --resource-group ACRDemoRG --name my-jenkins-container --query ipAddress.fqdn --output tsv
+   ```
+   Copy and open the FQDN in a browser to access Jenkins.
+
+9️⃣ **(Optional) Clean up resources:**
+   ```sh
+   az group delete --name ACRDemoRG --yes --no-wait
+   ```
+
+---
+
+## 🎯 Summary
+1. **Login to Azure and ACR** (`myacrdemo01`)
+2. **Tag and push the Jenkins image** to ACR
+3. **Deploy to Azure Container Instances (ACI)**
+4. **Access Jenkins via public URL**
+
+---
+
+🎉 Your **Jenkins container** is now running in **Azure Container Instances**! 🚀
+
